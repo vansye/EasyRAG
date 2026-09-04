@@ -1,0 +1,48 @@
+# ---- 本地内部文件，不公开 ----
+# 招新材料（实验室的文档，不属于本项目）
+/实验室大二招新项目.md
+/大二招新.md
+# 给 AI 的内部工作指令，含面试策略推断，仅本地
+/CLAUDE.md
+
+# ---- Java / Spring Boot ----
+target/
+!.mvn/wrapper/maven-wrapper.jar
+*.jar
+*.war
+# 凭据只从环境变量来，配置文件不入库（教训来自个人博客项目 A12）
+/server/config/
+application-local.yaml
+application-local.yml
+
+# ---- Python / RAG 服务 ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# ---- 前端 ----
+node_modules/
+dist/
+.vite/
+*.local
+
+# ---- 向量索引与运行时数据（派生物，可从 MySQL 重建，不入库）----
+/data/
+*.db
+*.sqlite3
+
+# ---- 环境与密钥 ----
+.env
+.env.*
+!.env.example
+
+# ---- IDE / 系统 ----
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
