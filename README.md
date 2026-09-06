@@ -10,7 +10,7 @@
 |---|---|---|
 | 前端 | Vue 3 + TypeScript + Vite | 问答界面、资料管理、检索过程展示 |
 | 知识管理服务 | Spring Boot 4.1.0 + MySQL 8 | 对外全部 REST API、资料管理、评估数据存储（唯一真相源） |
-| RAG 引擎 | Python + FastAPI + LangChain 1.3 | 切片、embedding、检索、agent 循环、生成 |
+| RAG 引擎 | Python + FastAPI + LangChain 1.x | 切片、embedding、检索、agent 循环、生成 |
 | 模型 | 可配置 | LLM 与 embedding 按配置切换厂商 |
 
 ## 架构
@@ -23,7 +23,9 @@ Spring Boot 与 Python 按职责划分：Spring Boot 拥有数据与入口，全
 收录入口 ──REST──► Spring Boot ──原文+内容哈希──► MySQL document
                         │
                         └──原文──► Python 切片 ──chunks──► Spring Boot 落库（chunk 文本+元数据）
-                                          Spring Boot ──chunks──► Python embedding → upsert 索引（派生）
+                                          Spring Boot ──chunks──► Python 建索引（派生）
+                                                                    ├─ Chroma 向量索引
+                                                                    └─ BM25 词法索引
 变更：内容哈希比对 → 旧 chunk 失效 → 重索引 → 问答结果同步更新
 
 问答流（提问）：
