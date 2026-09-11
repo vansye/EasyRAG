@@ -1,0 +1,8 @@
+# mvnw 是 shell 脚本，必须保持 LF：带 CRLF 在 Linux runner 上会
+# 报 `bad interpreter: /bin/sh^M` 而直接失败（CI 用的就是 ubuntu-latest）。
+mvnw text eol=lf
+*.sh text eol=lf
+
+# Windows 批处理反过来必须是 CRLF
+*.cmd text eol=crlf
+*.bat text eol=crlf

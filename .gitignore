@@ -9,9 +9,11 @@
 
 # ---- Java / Spring Boot ----
 target/
-!.mvn/wrapper/maven-wrapper.jar
 *.jar
 *.war
+# 否定规则必须排在 *.jar 之后：gitignore 是"后匹配者胜"，
+# 放在前面会被 *.jar 覆盖，导致 wrapper jar 静默不入库、别人 clone 后 ./mvnw 直接失败
+!.mvn/wrapper/maven-wrapper.jar
 # 凭据只从环境变量来，配置文件不入库（教训来自个人博客项目 A12）
 /server/config/
 application-local.yaml
@@ -33,7 +35,8 @@ dist/
 *.local
 
 # ---- 向量索引与运行时数据（派生物，可从 MySQL 重建，不入库）----
-/data/
+# 不加前导 / ：要挡住任意层级的 data/，含 rag-service/data/chroma/
+data/
 *.db
 *.sqlite3
 
