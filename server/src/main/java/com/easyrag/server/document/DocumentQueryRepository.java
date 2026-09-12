@@ -79,6 +79,12 @@ public class DocumentQueryRepository {
         return new DocumentPage(total == null ? 0 : total, items);
     }
 
+    /** 恢复扫描用（A1-2）：现存全部 PENDING 文档的 id，按 id 升序。 */
+    public List<Long> findPendingIds() {
+        return jdbcTemplate.queryForList(
+                "SELECT id FROM document WHERE deleted_at IS NULL AND index_status = 'PENDING' ORDER BY id", Long.class);
+    }
+
     private DocumentSummary mapSummary(ResultSet resultSet, int rowNumber) throws SQLException {
         return new DocumentSummary(
                 resultSet.getLong("id"),
