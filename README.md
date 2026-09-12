@@ -90,13 +90,16 @@ cd rag-service
 python -m venv .venv
 .venv/Scripts/python -m pip install -r requirements.txt   # Linux/macOS: .venv/bin/python
 cp .env.example .env                                      # 按需修改模型配置
-.venv/Scripts/python -m app
 ```
 
-默认用 Ollama 的 `bge-m3`（1024 维），需先拉取：
+默认配置用 Ollama 的 `bge-m3`（1024 维）。除拉模型外还需下载 tokenizer（约 16 MB，被 .gitignore 挡在仓库外，不下载则 `/chunk` 返回 503 `TOKENIZER_UNAVAILABLE`）：
 
 ```bash
 ollama pull bge-m3
+mkdir -p data/tokenizers   # Windows PowerShell: New-Item -ItemType Directory -Force data/tokenizers
+curl -L -o data/tokenizers/bge-m3-5617a9f61b028005a4858fdac845db406aefb181.json \
+  https://huggingface.co/BAAI/bge-m3/resolve/5617a9f61b028005a4858fdac845db406aefb181/tokenizer.json
+.venv/Scripts/python -m app
 ```
 
 验证：
@@ -120,9 +123,11 @@ cd rag-service && .venv/Scripts/python -m pytest    # 不需要 Ollama 在线
 | 里程碑 | 状态 |
 |---|---|
 | M0 样例语料 + 黄金问答集 | 完成（29 篇 / 30 题） |
-| M1 双后端骨架与健康检查 | 完成（27 个测试） |
-| M1 前端骨架 + CI | 未开始 |
-| M2 收录 + 索引 + 朴素问答 | 未开始 |
+| M1 双后端骨架与健康检查 | 完成 |
+| M1 前端骨架 + CI | CI 完成（双后端测试全绿）；前端未开始 |
+| M2 收录 + 索引 + 朴素问答 | **进行中**：收录/列表/异步索引/就绪恢复已落地（#16 #17），朴素问答未开始 |
+
+测试规模：Java 单元 472 + 集成 94（需本地 MySQL）、Python 190。当前测试数见各 PR 的验证段，以最新合并为准。
 
 ## 开发方式
 
