@@ -223,11 +223,12 @@ def test_embed_replaces_the_complete_document_in_internal_batches(
     assert response.json() == {"indexed": 3}
     assert [len(request["input"]) for request in embedding_server["requests"]] == [2, 1]
     assert all(request["truncate"] is False for request in embedding_server["requests"])
-    expected_texts = [
+    # embedding 输入口径：正文 + 换行 + 非空标题路径（不变）
+    expected_embedding_inputs = [
         chunk["text"] + ("\n" + chunk["heading_path"] if chunk["heading_path"] else "")
         for chunk in payload["chunks"]
     ]
-    assert [text for request in embedding_server["requests"] for text in request["input"]] == expected_texts
+    assert [text for request in embedding_server["requests"] for text in request["input"]] == expected_embedding_inputs
     records = populated_index._collection.get(include=["documents", "metadatas"])
     by_id = {identifier: (document, metadata) for identifier, document, metadata in zip(
         records["ids"], records["documents"], records["metadatas"], strict=True
@@ -235,7 +236,9 @@ def test_embed_replaces_the_complete_document_in_internal_batches(
     assert set(by_id) == {"201", "301", "302", "303"}
     for sequence, chunk in enumerate(payload["chunks"]):
         document, metadata = by_id[str(chunk["chunk_id"])]
-        assert document == expected_texts[sequence]
+        # documents 载荷口径（子 Issue C §五）：纯正文——检索返回的内容要直接
+        # 交给 LLM 与溯源展示，不能带拼接的标题路径尾巴；标题路径在 metadata
+        assert document == chunk["text"]
         assert metadata == {"document_id": 11, "seq": sequence,
                             "heading_path": chunk["heading_path"],
                             **({"tags": chunk["tags"]} if chunk["tags"] else {})}

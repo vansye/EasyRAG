@@ -160,7 +160,11 @@ class IndexStore:
                    for metadata in existing["metadatas"]):
                 raise ChunkIdConflict("chunk_id belongs to another document")
             batch_size = min(self._settings.embed_batch_size, self._client.get_max_batch_size())
-            documents = [chunk.embedding_text for chunk in chunks]
+            # documents 载荷存纯正文而非 embedding_text（拼接串）：检索返回的是
+            # 要交给 LLM 与溯源展示的内容，必须是干净的 chunk 原文。向量是显式
+            # 传入的，改载荷不影响向量；heading_path 已在 metadata 里，不丢失。
+            # 若为拿原文反向查 Java/MySQL，会破坏"B/C 不反向调用 A"的边界。
+            documents = [chunk.text for chunk in chunks]
             metadatas = [
                 {"document_id": document_id, "seq": sequence, "heading_path": chunk.heading_path,
                  **({"tags": chunk.tags} if chunk.tags else {})}
@@ -183,6 +187,43 @@ class IndexStore:
                     cleanup_error = type(cleanup_exc).__name__
                 raise IndexWriteError(type(exc).__name__, cleanup_error) from exc
             return len(chunks)
+
+    def query(self, question_vector: list[float], top_k: int = 5) -> list[dict[str, Any]]:
+        """按向量检索最相近的 chunk，降序返回，供模块 C 的问答链路使用。
+
+        只读本地派生索引，无任何出站调用。返回的 text 来自 documents 载荷
+        （纯正文，见 replace_document 的注释），metadata 补 document_id 与
+        heading_path；score 是 1 - cosine 距离，值越大越相近。
+        """
+        if top_k <= 0:
+            raise ValueError("top_k must be positive")
+        with self._write_lock:
+            if self._collection is None:
+                raise RuntimeError(self.chroma_error or "collection 未初始化")
+            # Chroma 拒绝 n_results=0（hnswlib 限制）：空集合或请求 0 条时直接
+            # 返回空列表，检索方无需感知这个库级怪癖
+            available = self._collection.count()
+            if not available:
+                return []
+            result = self._collection.query(
+                query_embeddings=[question_vector],
+                n_results=min(top_k, available),
+                include=["documents", "metadatas", "distances"],
+            )
+        hits: list[dict[str, Any]] = []
+        if not result["ids"] or not result["ids"][0]:
+            return hits
+        for chunk_id, text, metadata, distance in zip(
+                result["ids"][0], result["documents"][0],
+                result["metadatas"][0], result["distances"][0]):
+            hits.append({
+                "chunk_id": int(chunk_id),
+                "document_id": metadata.get("document_id") if metadata else None,
+                "text": text,
+                "heading_path": (metadata or {}).get("heading_path", ""),
+                "score": 1.0 - distance,
+            })
+        return hits
 
     def probe(self) -> dict[str, Any]:
         """向量索引的可读写探针，供 /health 使用。
