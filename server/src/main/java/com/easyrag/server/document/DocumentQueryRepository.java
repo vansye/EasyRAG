@@ -65,14 +65,18 @@ public class DocumentQueryRepository {
                 ? jdbcTemplate.queryForObject("SELECT COUNT(*) FROM document WHERE " + where, Long.class, status)
                 : jdbcTemplate.queryForObject("SELECT COUNT(*) FROM document WHERE " + where, Long.class);
 
+        // 用 formatted 而非 text block 拼接：收尾引号前的空白会被 text block
+        // 剥掉、拼接处也没有换行，"WHERE """ + where + """ORDER BY" 实际拼出
+        // "WHEREdeleted_at...ORDER BY"。mock JdbcTemplate 不解析 SQL，这个错
+        // 只有真 MySQL 的 IT 能暴露（单测 454 绿照跑不误）。
         String itemsSql = """
                 SELECT d.id, d.title, d.source_type, d.tags, d.index_status, d.updated_at,
                        (SELECT COUNT(*) FROM chunk c WHERE c.document_id = d.id) AS chunk_count
                 FROM document d
-                WHERE """ + where + """
+                WHERE %s
                 ORDER BY d.updated_at DESC, d.id DESC
                 LIMIT ? OFFSET ?
-                """;
+                """.formatted(where);
         List<DocumentSummary> items = filtered
                 ? jdbcTemplate.query(itemsSql, this::mapSummary, status, size, (long) page * size)
                 : jdbcTemplate.query(itemsSql, this::mapSummary, size, (long) page * size);
