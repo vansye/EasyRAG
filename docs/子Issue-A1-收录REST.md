@@ -62,7 +62,7 @@ DocumentIntakeService                     # 收录：解析 → 校验 → 落�
 DocumentQueryRepository                   # 读侧
   insertPending(NewDocument) → long
   findPage(status, page, size) → DocumentPage
-    chunk_count 用 COUNT(*) 实时算（A1-3），不读冗余列
+    chunk_count 用 COUNT(*) 实时算（A1-3），不读 document.chunk_count 列
   findPendingIds() → List<Long>           # 供恢复扫描（A1-2）
 
 IndexingTrigger                           # 异步推进
@@ -173,7 +173,7 @@ frontmatter.title → 正文首个 # 一级标题 → 文件名去扩展名
 |---|---|---|---|
 | A1-1 | 闸门初态如何转到 READY | **手动端点 `POST /api/admin/ready`** | 保持子 Issue A 的 A-2 裁决无例外：仅重启 Java 不会终止旧 Python 请求，自动就绪等于在没确认旧执行者退出的情况下放行。显式端点让"谁确认过"这件事可追溯，代价只是 demo 多一步 |
 | A1-2 | 停在 PENDING 的文档如何重新推进 | **恢复时扫描全部 PENDING 逐篇提交** | 否则 A-1 阶段存在"上传了但永远不索引"的死角——重索引端点要到 A-2 才有。恢复本来就是"把系统拉回一致状态"，顺带把积压推进去符合这个语义 |
-| A1-3 | 列表的 `chunk_count` 从哪来 | **实时 `COUNT(*)`** | 与 A-6 裁决的语义（MySQL 现存 chunk 行数）天然一致，不会出现冗余字段与事实不符；几百篇规模下性能无差别。维护计数列则需要改动已测试通过的落库代码，收益不抵风险 |
+| A1-3 | 列表的 `chunk_count` 从哪来 | **实时 `COUNT(*)`** | `document.chunk_count` 列已存在，且由 `ChunkRepository.replace()` 维护——但**维护点只有这一处**。A-2 加入删除后会出现第二条 chunk 变更路径，列的正确性就变成「每条未来的变更路径都记得更新」这一持续义务，漏一处就静默失真。实时 COUNT 在构造上不可能过期；几百篇规模下代价为零 |
 
 ### A1-1 的接口
 
@@ -184,6 +184,12 @@ POST /api/admin/ready
 ```
 
 `recovered` 是本次扫描并提交的 PENDING 篇数（A1-2），不是索引成功数——索引在后台异步进行，结果看各文档的 `index_status`。
+
+### A1-3 里 `document.chunk_count` 列的去留
+
+**保留，但接口不依赖它。** 删除它需要一次迁移，而它在排查时仍有用——对照实时 COUNT 与列值，能立刻看出是否有变更路径漏了维护。
+
+口径：**列是缓存，COUNT 是事实**。两者不一致时以 COUNT 为准，并说明有变更路径没维护到列。
 
 ## 九、一条自行裁决的边界
 
