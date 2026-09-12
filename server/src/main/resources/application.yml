@@ -11,6 +11,17 @@ spring:
   application:
     name: easyrag-server
 
+  servlet:
+    multipart:
+      # 产品上限 1 MB 由 DocumentIntakeService 判定（A-3：响应含实际大小）。
+      # 这里的 4 MB 是防滥用的服务端硬上限，高于产品上限一档，让正常的
+      # 略超限请求都走业务层拿到准确提示；超过 4 MB 才由容器拒绝。
+      # resolve-lazily 让超限异常在参数解析阶段抛出，能进入
+      # @ExceptionHandler 映射成 400，而不是 multipart 预解析阶段裸抛 500。
+      max-file-size: 4MB
+      max-request-size: 4MB
+      resolve-lazily: true
+
   datasource:
     # createDatabaseIfNotExist：库不存在时自动建，省掉 README 里一步手工 CREATE。
     # 注意它只建库不建表——表由 Flyway 迁移负责，两者缺一都会得到"能连上但没表"。
