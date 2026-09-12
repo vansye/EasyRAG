@@ -10,8 +10,8 @@
 |---|---|---|
 | 前端 | Vue 3 + TypeScript + Vite | 问答界面、资料管理、检索过程展示 |
 | 知识管理服务 | Spring Boot 4.1.0 + MySQL 8 | 对外全部 REST API、资料管理、评估数据存储（唯一真相源） |
-| RAG 引擎 | Python + FastAPI + LangChain 1.x | 切片、embedding、检索、agent 循环、生成 |
-| 模型 | 可配置 | LLM 与 embedding 按配置切换厂商 |
+| RAG 引擎 | Python + FastAPI | 切片、embedding、检索、agent 循环、生成 |
+| 模型 | 可配置 | LLM 与 embedding 按配置切换厂商（provider + model + dim 三元组） |
 
 ## 架构
 
@@ -43,30 +43,89 @@ Vue 展示：答案 + 出处 + 检索过程（重查次数、采用/丢弃的片
 
 ```
 EasyRAG/
-├── frontend/      # Vue 3 前端
-├── server/        # Spring Boot 知识管理服务
-├── rag-service/   # Python RAG 引擎
-└── docs/          # 设计文档、Issue 底稿、API 文档
+├── server/        # Spring Boot 知识管理服务（M1 已落地）
+├── rag-service/   # Python RAG 引擎（M1 已落地）
+├── docs/          # 设计文档、Issue 底稿、黄金问答集
+└── sample-knowledge/  # 样例语料（29 篇），供评估使用
 ```
 
-## 本地启动（骨架落地后更新为实测命令）
+前端（`frontend/`，Vue 3）尚未开始，见下方进度。
+
+## 依赖
+
+| 组件 | 版本 | 说明 |
+|---|---|---|
+| JDK | 17 | 本机实测 17；Spring Boot 4.1 要求 17+ |
+| Maven | 不需要 | 用仓库自带的 `./mvnw` |
+| Python | 3.14 | 实测 3.14.6；Chroma 1.5.9 有 cp314 wheel |
+| MySQL | 8.0 | 库会自动创建（`createDatabaseIfNotExist`），表由 Flyway 迁移建 |
+| Ollama | 任意 | 仅在用本地 embedding 时需要 |
+
+## 本地启动
+
+### 1. 知识管理服务（端口 8080）
+
+数据库凭据从环境变量读，不写进代码：
 
 ```bash
-# 0. MySQL
-mysql -u root -e "CREATE DATABASE easyrag CHARACTER SET utf8mb4"
-
-# 1. 知识管理服务（端口 8080）
-cd server && mvn spring-boot:run
-
-# 2. RAG 引擎（端口 8000，模型配置见 rag-service）
-cd rag-service && pip install -r requirements.txt && python -m app
-
-# 3. 前端（端口 5173）
-cd frontend && npm install && npm run dev
+cd server
+export MYSQL_USER=<用户名>          # Windows PowerShell: $env:MYSQL_USER="<用户名>"
+export MYSQL_PASSWORD=<密码>
+./mvnw spring-boot:run
 ```
+
+启动时 Flyway 自动建 `document` 与 `chunk` 表。验证：
+
+```bash
+curl http://localhost:8080/health
+# {"status":"UP","service":"easyrag-server","db":{"database":"mysql","status":"UP"}}
+```
+
+`db.status` 为 `DOWN` 表示连不上库（凭据或服务问题）——此时进程仍会正常起，健康检查如实报告。
+
+### 2. RAG 引擎（端口 8000）
+
+```bash
+cd rag-service
+python -m venv .venv
+.venv/Scripts/python -m pip install -r requirements.txt   # Linux/macOS: .venv/bin/python
+cp .env.example .env                                      # 按需修改模型配置
+.venv/Scripts/python -m app
+```
+
+默认用 Ollama 的 `bge-m3`（1024 维），需先拉取：
+
+```bash
+ollama pull bge-m3
+```
+
+验证：
+
+```bash
+curl http://localhost:8000/health
+```
+
+`embedding.status` 为 `DOWN` 且 `error` 为 `MODEL_NOT_FOUND` 表示配置的模型没拉下来，响应里会列出实际可用的模型。换模型需同时改 `EMBEDDING_MODEL` 与 `EMBEDDING_DIM`——两者不一致时服务拒绝启动并提示重建（维度错配若不拦住，报错会推迟到检索时才爆，且表现为距离计算异常）。
+
+### 3. 测试
+
+```bash
+cd server && ./mvnw test        # 单元测试，不需要数据库
+cd server && ./mvnw verify      # 追加集成测试，需要 MySQL 与本地凭据
+cd rag-service && .venv/Scripts/python -m pytest    # 不需要 Ollama 在线
+```
+
+## 进度
+
+| 里程碑 | 状态 |
+|---|---|
+| M0 样例语料 + 黄金问答集 | 完成（29 篇 / 30 题） |
+| M1 双后端骨架与健康检查 | 完成（27 个测试） |
+| M1 前端骨架 + CI | 未开始 |
+| M2 收录 + 索引 + 朴素问答 | 未开始 |
 
 ## 开发方式
 
-- Issue 驱动：总功能文档 Issue（[#1](https://github.com/vansye/EasyRAG/issues/1)）定义产品边界与模块划分，每个模块一个子 Issue；底稿见 [docs/总功能文档-Issue.md](docs/总功能文档-Issue.md)。
+- Issue 驱动：总功能文档 Issue（[#1](https://github.com/vansye/EasyRAG/issues/1)）定义产品边界与模块划分，每个模块一个子 Issue（[#2 资料管理](https://github.com/vansye/EasyRAG/issues/2)、[#3 索引管线](https://github.com/vansye/EasyRAG/issues/3)）；底稿见 [docs/总功能文档-Issue.md](docs/总功能文档-Issue.md)。
 - 一个功能一个 PR，关联对应 Issue，描述说明做了什么、为什么。检索类改进的 PR 标题附评估数字变化（如 `混合检索：hit@5 60% → 80%`）。
-- 评估口径与黄金问答集随 M0 阶段入库。
+- 评估口径与黄金问答集见 [docs/eval/golden-set-v1.md](docs/eval/golden-set-v1.md)。

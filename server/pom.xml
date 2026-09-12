@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+      EasyRAG 知识管理服务（Spring Boot）。
+      职责（见 docs/子Issue-A-资料管理.md）：
+        - 全部对前端的 REST 入口
+        - MySQL 唯一写入者（document / chunk / 黄金集 / 评估）
+        - 内容哈希与变更检测、索引状态机编排
+        - 面向前端的全部 API；对 Python 走内部 HTTP（推模式）
+      边界：不持有 RAG 计算逻辑（切片 / embedding / 检索在 rag-service）。
+    -->
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.1.0</version>
+        <relativePath/> <!-- lookup parent from repository -->
+    </parent>
+
+    <groupId>com.easyrag</groupId>
+    <artifactId>server</artifactId>
+    <version>0.1.0</version>
+    <name>easyrag-server</name>
+    <description>EasyRAG 知识管理服务：数据权威层（A 模块）</description>
+
+    <properties>
+        <java.version>17</java.version>
+        <maven.compiler.release>17</maven.compiler.release>
+    </properties>
+
+    <dependencies>
+        <!-- 对外 REST / 内部 HTTP 调用 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- JdbcTemplate：轻量数据访问。不做 JPA 实体，避免过早固化领域模型 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+
+        <!-- 启动时校验配置、暴露 /actuator/health 之外的业务健康检查 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- MySQL 8 -->
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Flyway：schema 迁移（版本化建表，不手工 CREATE）。
+             Spring Boot 4 把各自动配置拆成了独立模块——只加 flyway-core 只有库、
+             没有 FlywayAutoConfiguration，迁移不会在启动时执行（这个坑由
+             SchemaMigrationIT 抓到：/health 报 UP 但表不存在）。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-flyway</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Spring Boot 4 把 @WebMvcTest 拆到了独立构件（包路径也从
+             boot.test.autoconfigure.web.servlet 改为 boot.webmvc.test.autoconfigure） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+
+            <!-- Surefire 跑单元测试（*Test），默认排除需要 MySQL 的那些：
+                 CI 里没有数据库也要能绿。 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <excludedGroups>requires-mysql</excludedGroups>
+                </configuration>
+            </plugin>
+
+            <!-- Failsafe 跑集成测试（*IT）。不显式声明它，`*IT` 类名既不匹配
+                 Surefire 的默认 include，parent 也只在 pluginManagement 里管理
+                 Failsafe 而未绑定执行——结果 SchemaMigrationIT 在 mvn test 和
+                 mvn verify 里都不会跑，那个"抓到 Flyway 假绿"的测试守不住任何回归。
+                 本地带库时用 `mvn verify` 跑；无库环境用 `mvn test` 只跑单元测试。 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
