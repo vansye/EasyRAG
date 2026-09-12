@@ -64,7 +64,7 @@ PENDING ──► INDEXING ──► INDEXED
 
 选异步而非同步的理由：U1 的体验是"丢进去立刻出现在列表里"，而 embedding 依赖外部模型服务、耗时不可控。状态机同时给"更新重索引"和"手动重索引"提供统一入口。
 
-编排次序（与模块 B 的两跳调用；Python `/chunk`、`/embed` 与 Java 切片校验/事务落库已实现，Java `/chunk`、`/embed` 客户端分别见 §九、§十，统一传输契约见 §十一，独立删除索引客户端见 §十二，业务门禁原语见 §十四，文档索引状态仓库见 §十五，已有 PENDING 文档的同步编排与失败清理见 §十六；上传接口、单执行者、恢复与问答入口仍未接通）：
+编排次序（与模块 B 的两跳调用；Python `/chunk`、`/embed` 与 Java 切片校验/事务落库已实现，Java `/chunk`、`/embed` 客户端分别见 §九、§十，统一传输契约见 §十一，独立删除索引客户端见 §十二，业务门禁原语见 §十四，文档索引状态仓库见 §十五，同步单篇编排与失败清理见 §十六；**上传接口、异步单执行者与就绪恢复入口已落地（子 Issue A-1，#15）**，问答入口属模块 C、URL 收录与更新/删除属 A-2，均未接通）：
 
 ```
 1. Java: 存原文 + 哈希，status = PENDING
@@ -80,7 +80,7 @@ PENDING ──► INDEXING ──► INDEXED
 
 任一步失败 → status = FAILED，index_error 记具体原因（含 Python 返回的 `cause` / `cleanup_error`），不做隐式 HTTP 重试；只有确认不存在未结束的索引变更、清理成功且业务终态已落库，才允许手动重试整篇文档（见 §十三）。失败路径上**无条件尽力调用一次 `DELETE /index/{document_id}`**，清理调用失败也必须记录，不能掩盖原始错误。超时或 Python 不可达只说明结果不确定，可能已写入或部分写入，不能断言索引为空或清理必定成功。已落库的 chunk 保留，供排查与下次重索引前清空。Python 的模型失败保护与 `409 CHUNK_ID_CONFLICT` 不改动旧向量，仅约束该次 `/embed`；Java 随后的 DELETE 是针对当前文档的独立清理调用。
 
-M2 采用**单 Java 实例、单 Python 写入进程、全部索引变更仅经 Java 编排**的轻量边界：完整变更工作流全局串行，并与问答互斥；索引变更结果不明时暂停后续变更和问答，不用超时换取继续执行的许可。业务级门禁不等于跨 HTTP 持有数据库事务，数据库操作仍使用短事务。Python 只在单进程的索引变更临界区内串行化写入、删除与 reset，**整篇替换不是原子事务**，也不会取消正在计算的 embedding。门禁和状态仓库分别见 §十四、§十五，接入它们的同步单篇编排见 §十六；业务入口与维护恢复尚未接通，体验与恢复约束见 §十三。
+M2 采用**单 Java 实例、单 Python 写入进程、全部索引变更仅经 Java 编排**的轻量边界：完整变更工作流全局串行，并与问答互斥；索引变更结果不明时暂停后续变更和问答，不用超时换取继续执行的许可。业务级门禁不等于跨 HTTP 持有数据库事务，数据库操作仍使用短事务。Python 只在单进程的索引变更临界区内串行化写入、删除与 reset，**整篇替换不是原子事务**，也不会取消正在计算的 embedding。门禁和状态仓库分别见 §十四、§十五，接入它们的同步单篇编排见 §十六；**单执行者与就绪恢复入口已落地（A-1，#16 #17）**，问答入口与维护式 reset/rebuild 的编排见 §十三。
 
 **全量重建**：换 embedding 模型或怀疑索引与库不一致时，由 Java 编排。先关闭常规变更和问答入口、确认旧在途索引变更已结束，再执行 `GET /health` 校验依赖子项 → `POST /reset` → 分页读取 MySQL 未删除文档 → 逐篇加载完整 chunks（`ORDER BY seq`）→ 每篇一次 `POST /embed` → 核对逐篇及总计数。存在未确认调用时须先完成 §十三 的维护隔离，不能只靠 health 或 reset 排除旧任务。禁止跨文档混装或将一篇拆成多次 `/embed`；任何失败或计数不符都表示重建未完成，不能报成功或开放问答。当前只核对 Chroma，BM25 到 M4 前保持空壳。Python 不反向拉取（见子 Issue B §三、B-6 与 B-14）。
 
@@ -146,11 +146,13 @@ POST   /api/documents
        multipart: file                       # 上传 md/txt
        或 json:   { url: string }            # 提交链接
   → 201 { id, title, source_type, index_status: "PENDING" }
-  → 400 抓取失败 / 不支持的类型 / 空内容
+  → 400 { "error": "<面向用户的原因>" }       # 抓取失败 / 不支持的类型 / 空内容 /
+                                             #   非 UTF-8 / 超 1MB（附实际字节数）
 
 GET    /api/documents?status=&page=&size=
   → 200 { total, items: [{ id, title, source_type, tags,
                            index_status, chunk_count, updated_at }] }
+     # status 大小写不敏感（归一为大写后过滤）；page 从 0 起，size 默认 20、上限 100
      # chunk_count 语义：MySQL 中现存的 chunk 行数，不是索引里的条数。
      #   PENDING  —— 0（首次）或上一轮的遗留数（重索引前不清）
      #   INDEXING —— 本轮切片的最终条数（切片原子返回、一次落库，不会中途增长）
@@ -177,6 +179,13 @@ POST   /api/documents/{id}/reindex
 GET    /api/documents/{id}/chunks
   → 200 { items: [{ id, seq, text, byte_start, byte_end, heading_path, token_count }] }
        # 透明度接口：让"切成什么样"可见，也是调试切分策略的入口
+
+POST   /api/admin/ready                      # 就绪恢复（A1-1；已落地）
+  → 200 { state: "READY", recovered: int }   # recovered = 重提的 PENDING 篇数
+  → 409 { state: "MUTATING"|"RECOVERING" }   # 有未结束的变更，不夺取闸门
+
+# 状态标注（2026-09-12）：POST/GET /api/documents 与 POST /api/admin/ready 已落地（A-1）；
+#   其余（详情/PUT/DELETE/reindex/chunks）属 A-2，尚未实现
 ```
 
 ### Spring Boot → Python（Python 端实现见子 Issue B；Java `/chunk` 客户端见 §九）
