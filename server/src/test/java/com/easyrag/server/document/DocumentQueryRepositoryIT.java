@@ -136,9 +136,9 @@ class DocumentQueryRepositoryIT {
 
         assertThat(firstPage.total()).isEqualTo(3);
         assertThat(firstPage.items()).extracting(DocumentQueryRepository.DocumentSummary::title)
-                .containsExactly("第3篇.md", "第2篇.md");
+                .containsExactly("第3篇", "第2篇");
         assertThat(secondPage.items()).extracting(DocumentQueryRepository.DocumentSummary::title)
-                .containsExactly("第1篇.md");
+                .containsExactly("第1篇");
     }
 
     private long insertDocument(String filename, String status) {
