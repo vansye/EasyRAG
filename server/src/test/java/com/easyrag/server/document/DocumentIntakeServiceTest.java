@@ -106,13 +106,16 @@ class DocumentIntakeServiceTest {
     }
 
     @Test
-    @DisplayName("超过 1 MB：拒绝且提示含实际大小与上限，不入库不触发")
+    @DisplayName("超过 1 MB：拒绝且提示能看出实际大小与上限的差异，不入库不触发")
     void rejectsOversizeWithActualSizeInMessage() {
         byte[] oversize = new byte[DocumentIntakeService.MAX_CONTENT_BYTES + 1];
 
         assertThatThrownBy(() -> service.intake("大文件.md", oversize))
                 .isInstanceOf(DocumentIntakeService.Rejected.class)
-                .hasMessageContaining("1.0 MB")
+                // 只写 "1.0 MB" 时两边四舍五入后一样大，用户看不出差在哪，
+                // 所以提示必须带上精确字节数（端到端实测发现）
+                .hasMessageContaining("1,048,577")
+                .hasMessageContaining("1,048,576")
                 .hasMessageContaining("上限")
                 .hasMessageContaining("拆分");
         then(documents).should(never()).insertPending(any());

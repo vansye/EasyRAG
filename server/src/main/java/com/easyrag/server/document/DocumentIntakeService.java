@@ -119,6 +119,15 @@ public class DocumentIntakeService {
                 String key = entry.group(1);
                 String value = entry.group(2).strip();
                 if (key.equals("title") && title == null) {
+                    // 引号未闭合说明这个值跨了行，而闭合边界 --- 可能落在值内部
+                    // （对抗性审查发现：title: "说明\n---\n仍在标题值" 会把 title
+                    // 解析成半截的 `"说明`）。正确处理跨行值需要真 YAML 解析器，
+                    // 而本模块的口径是"只认两个键、不引 YAML 库"（A-1 §三）。
+                    // 因此选保守失败：放弃这个 title，降级到正文 H1 或文件名。
+                    // 宁可用一个次优但正确的标题，也不要一个截断错误的标题。
+                    if (!hasBalancedQuotes(value)) {
+                        continue;
+                    }
                     title = unquote(value);
                 } else if (key.equals("tags") && value.startsWith("[") && value.endsWith("]")) {
                     tags = parseTags(value);
@@ -127,13 +136,43 @@ public class DocumentIntakeService {
             return new FrontMatter(title, tags, content.substring(block.end()));
         }
 
+        private static boolean hasBalancedQuotes(String value) {
+            return value.chars().filter(character -> character == '"').count() % 2 == 0;
+        }
+
+        /**
+         * 逐字符扫描切分，引号内的逗号不算分隔符。
+         *
+         * 早先用 split(",")，`tags: ["a,b", c]` 会被切成 `["a, b", c]`——引号内
+         * 的逗号被当成分隔符，且 unquote 无法还原（对抗性审查发现）。标签内容
+         * 静默出错比拒绝更糟：用户看不出哪里不对，按标签过滤时才发现对不上。
+         */
         private static List<String> parseTags(String value) {
-            String inner = value.substring(1, value.length() - 1).strip();
-            if (inner.isEmpty()) {
-                return List.of();
+            String inner = value.substring(1, value.length() - 1);
+            List<String> items = new java.util.ArrayList<>();
+            StringBuilder current = new StringBuilder();
+            boolean quoted = false;
+            for (int index = 0; index < inner.length(); index++) {
+                char character = inner.charAt(index);
+                if (character == '"') {
+                    quoted = !quoted;
+                    current.append(character);
+                } else if (character == ',' && !quoted) {
+                    addTag(items, current.toString());
+                    current.setLength(0);
+                } else {
+                    current.append(character);
+                }
             }
-            return java.util.Arrays.stream(inner.split(","))
-                    .map(String::strip).filter(item -> !item.isEmpty()).map(FrontMatter::unquote).toList();
+            addTag(items, current.toString());
+            return List.copyOf(items);
+        }
+
+        private static void addTag(List<String> items, String raw) {
+            String tag = unquote(raw.strip()).strip();
+            if (!tag.isEmpty()) {
+                items.add(tag);
+            }
         }
 
         private static String unquote(String value) {
@@ -187,14 +226,21 @@ public class DocumentIntakeService {
                 : value.substring(0, value.offsetByCodePoints(0, maxCodePoints));
     }
 
+    /**
+     * 人类可读的大小，附带精确字节数。
+     *
+     * 只给"1.0 MB"是不够的：超限 4 字节时两边都四舍五入成 1.0 MB，提示变成
+     * "文件 1.0 MB 超过收录上限 1.0 MB"，用户看不出差在哪（端到端实测发现）。
+     * 附上字节数让差异始终可见。
+     */
     private static String describe(int bytes) {
         if (bytes >= 1024 * 1024) {
-            return String.format(Locale.ROOT, "%.1f MB", bytes / 1048576.0);
+            return String.format(Locale.ROOT, "%.2f MB（%,d 字节）", bytes / 1048576.0, bytes);
         }
         if (bytes >= 1024) {
-            return String.format(Locale.ROOT, "%.1f KB", bytes / 1024.0);
+            return String.format(Locale.ROOT, "%.1f KB（%,d 字节）", bytes / 1024.0, bytes);
         }
-        return bytes + " B";
+        return bytes + " 字节";
     }
 
     public record DocumentCreated(@JsonProperty("id") long id,
