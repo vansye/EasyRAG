@@ -89,6 +89,46 @@ public class DocumentQueryRepository {
                 "SELECT id FROM document WHERE deleted_at IS NULL AND index_status = 'PENDING' ORDER BY id", Long.class);
     }
 
+    /**
+     * 按批量 chunk_id 查出处（问答流的溯源补全，U4）。
+     *
+     * JOIN document 拿标题（业务真相在 MySQL，Python 只有 chunk_id——见子
+     * Issue C §四"为什么出处由 Java 补"）。软删文档的 chunk 不返回：软删
+     * 后检索自然查不到新向量，但旧向量在删除同步（A-2）落地前仍可能命中，
+     * 这里挡住"答案引用已删文档"的口径。
+     */
+    public List<ChunkSource> findSources(List<Long> chunkIds) {
+        if (chunkIds == null || chunkIds.isEmpty()) {
+            return List.of();
+        }
+        String placeholders = String.join(",", java.util.Collections.nCopies(chunkIds.size(), "?"));
+        return jdbcTemplate.query("""
+                SELECT c.id, c.document_id, d.title, c.text, c.char_start, c.char_end, c.heading_path
+                FROM chunk c JOIN document d ON d.id = c.document_id
+                WHERE c.id IN (%s) AND d.deleted_at IS NULL
+                ORDER BY c.id
+                """.formatted(placeholders), this::mapSource, chunkIds.toArray());
+    }
+
+    private ChunkSource mapSource(ResultSet resultSet, int rowNumber) throws SQLException {
+        return new ChunkSource(
+                resultSet.getLong("id"),
+                resultSet.getLong("document_id"),
+                resultSet.getString("title"),
+                resultSet.getString("text"),
+                resultSet.getInt("char_start"),
+                resultSet.getInt("char_end"),
+                resultSet.getString("heading_path"));
+    }
+
+    public record ChunkSource(@JsonProperty("chunk_id") long chunkId,
+                              @JsonProperty("document_id") long documentId,
+                              @JsonProperty("title") String title,
+                              @JsonProperty("text") String text,
+                              @JsonProperty("byte_start") int byteStart,
+                              @JsonProperty("byte_end") int byteEnd,
+                              @JsonProperty("heading_path") String headingPath) {}
+
     private DocumentSummary mapSummary(ResultSet resultSet, int rowNumber) throws SQLException {
         return new DocumentSummary(
                 resultSet.getLong("id"),
