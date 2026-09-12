@@ -22,6 +22,7 @@ from app.chunking import split_markdown
 from app.config import Settings, get_settings
 from app.embedding import EmbeddingChunk, EmbeddingResponseError, embed_texts, embedding_headers, embedding_url
 from app.index_store import ChunkIdConflict, IndexStore, IndexWriteError
+from app.qa import QaError, QaPipeline, QaRequest, QaResponse
 
 SERVICE_NAME = "easyrag-rag-service"
 
@@ -232,6 +233,37 @@ def embed_document(payload: EmbedRequest) -> dict[str, int]:
             "error": "INDEX_UNAVAILABLE", "cause": type(exc).__name__,
         }) from exc
     return {"indexed": indexed}
+
+
+@app.post("/query", responses={
+    503: {"description": "embedding、索引或 LLM 不可用"},
+})
+def answer_question(payload: QaRequest) -> QaResponse:
+    """模块 C 的问答入口（仅 Java 调用，不暴露给前端）。
+
+    检索 → 三态判定 → 生成/拒答，单轮。拒答是正常返回（status=REFUSED），
+    不是错误；503 只用于技术故障（embedding 索引不可达、判定输出无法解析）。
+    """
+    settings: Settings = app.state.settings
+    index: IndexStore = app.state.index
+    try:
+        index.vector_count()
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail={
+            "error": "INDEX_UNAVAILABLE", "cause": type(exc).__name__,
+        }) from exc
+    try:
+        pipeline = QaPipeline(settings=settings, index=index)
+        return pipeline.answer_question(payload.question.strip())
+    except QaError as exc:
+        raise HTTPException(status_code=503, detail={
+            "error": "LLM_UNAVAILABLE", "cause": "QA_PIPELINE",
+            "detail": str(exc)[:200],
+        }) from exc
+    except (httpx.HTTPError, EmbeddingResponseError) as exc:
+        raise HTTPException(status_code=503, detail={
+            "error": "EMBEDDING_UNAVAILABLE", "cause": type(exc).__name__,
+        }) from exc
 
 
 class ChunkRequest(BaseModel):
