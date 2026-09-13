@@ -21,7 +21,9 @@ from tokenizers import Tokenizer
 from app.chunking import Chunk, split_markdown
 
 
-TOP_K = 5
+K_VALUES = (1, 3, 5, 10)
+RETRIEVAL_LIMIT = max(K_VALUES)
+DETAIL_TOP_K = 5
 SERVICE_DIR = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = SERVICE_DIR.parent
 TOKENIZER_REVISION = "5617a9f61b028005a4858fdac845db406aefb181"
@@ -87,7 +89,7 @@ def parse_questions(text: str) -> list[Question]:
 def first_hit_rank(question: Question, hits: list[dict]) -> int | None:
     if question.expected_source is None:
         return None
-    return next((rank for rank, hit in enumerate(hits[:TOP_K], start=1)
+    return next((rank for rank, hit in enumerate(hits, start=1)
                  if hit["source"] == question.expected_source), None)
 
 
@@ -96,11 +98,13 @@ def summarize(questions: list[Question], rankings: dict[str, list[dict]]) -> dic
     for category in ("Q", "R", "overall"):
         selected = [question for question in questions
                     if question.category in ("QR" if category == "overall" else category)]
-        hits = sum(first_hit_rank(question, rankings[question.question_id]) is not None
-                   for question in selected)
+        ranks = [first_hit_rank(question, rankings[question.question_id]) for question in selected]
         metrics[category] = {
-            "hits": hits, "total": len(selected),
-            "hit_rate": hits / len(selected) if selected else None,
+            "total": len(selected),
+            "hits_at_k": {k: sum(rank is not None and rank <= k for rank in ranks)
+                          for k in K_VALUES},
+            "hit_rate_at_k": {k: sum(rank is not None and rank <= k for rank in ranks) / len(selected)
+                              if selected else None for k in K_VALUES},
         }
     metrics["excluded"] = {category: sum(question.category == category for question in questions)
                            for category in "NP"}
@@ -180,7 +184,7 @@ def retrieve_chunks(
         )
         rankings = {}
         for question, vector in zip(questions, query_vectors, strict=True):
-            result = collection.query(query_embeddings=[vector], n_results=min(TOP_K, len(records)),
+            result = collection.query(query_embeddings=[vector], n_results=min(RETRIEVAL_LIMIT, len(records)),
                                       include=["metadatas", "distances"])
             rankings[question.question_id] = [
                 {**metadata, "distance": float(distance)}
@@ -212,27 +216,37 @@ def render_report(report: dict) -> str:
     parameters = report["parameters"]
     statistics = report["chunk_statistics"]
     lines = [
-        "# 单轮召回基线 v1（子 Issue B 验收）", "",
+        "# 离线召回验收报告（子 Issue B）", "",
         f"> 运行时间：{report['generated_at']}。由离线 CLI 生成，未调用 LLM。", "",
         "## 验收边界", "",
         "本报告只验证切片与向量索引的离线召回，不代表 Java 收录、更新同步、业务问答或模块 D 评估平台已完成。",
         "不实现 Agent、改写、BM25、重排、拒答或部分覆盖判断；不读取 MySQL，不打开业务持久化 Chroma。", "",
         "## 召回结果", "",
-        "| 类别 | 命中/题数 | hit@5 |", "|---|---:|---:|",
+        "| 类别 | " + " | ".join(f"hit@{k}" for k in K_VALUES) + " |",
+        "|---|" + "---:|" * len(K_VALUES),
     ]
     for category, label in (("Q", "Q"), ("R", "R"), ("overall", "Q+R")):
         metric = report["metrics"][category]
-        rate = f"{metric['hit_rate']:.2%}" if metric["hit_rate"] is not None else "未评分"
-        lines.append(f"| {label} | {metric['hits']}/{metric['total']} | {rate} |")
+        cells = [f"{metric['hits_at_k'][k]}/{metric['total']}（{metric['hit_rate_at_k'][k]:.2%}）"
+                 if metric["hit_rate_at_k"][k] is not None else "未评分"
+                 for k in K_VALUES]
+        lines.append(f"| {label} | " + " | ".join(cells) + " |")
     excluded = report["metrics"]["excluded"]
     failures = [question.question_id for question in report["questions"]
                 if question.category in "QR"
                 and first_hit_rank(question, report["rankings"][question.question_id]) is None]
+    late_hits = [f"{question.question_id}@{rank}"
+                 for question in report["questions"]
+                 if question.category in "QR"
+                 and (rank := first_hit_rank(question, report["rankings"][question.question_id]))
+                 and rank > DETAIL_TOP_K]
     lines += [
-        "", f"漏召回题：{', '.join(failures) if failures else '无'}。",
+        "", f"漏召回题（前 {RETRIEVAL_LIMIT} 均未命中）：{', '.join(failures) if failures else '无'}。",
+        f"命中但未进前 {DETAIL_TOP_K}：{', '.join(late_hits) if late_hits else '无'}。",
         f"N 类 {excluded['N']} 题、P 类 {excluded['P']} 题只展示召回，不进入上述分母，也不据此判定拒答或部分覆盖能力。",
-        "", "**计分口径**：Q/R 均使用原问题；前五个 chunk 任意一个来自唯一标注文档即命中。",
-        "不先按文档去重，不把同主题次要文档算正确，不把第六名计为命中。",
+        "", "**计分口径**：Q/R 均使用原问题；hit@k = 前 k 个 chunk 中任意一个来自唯一标注文档，"
+        f"k ∈ {{{', '.join(str(k) for k in K_VALUES)}}}。",
+        "不先按文档去重，不把同主题次要文档算正确；各 k 独立计分，排名超过该 k 不计入。",
         "命中文档不等于片段足以完整回答；本次不评估答案质量或引用忠实度。", "",
         "## 参数与数据", "",
         f"- 模型：`{parameters['model_tag']}`；请求名：`{parameters['model']}`；维度：{parameters['dimensions']}。",
@@ -270,7 +284,8 @@ def render_report(report: dict) -> str:
         ]
     else:
         lines.append("Write-Output 'Supply the tokenizer file with the SHA-256 recorded above before running.'")
-    lines += [report["command"], "```", "", "## 逐题 Top-5", "",
+    lines += [report["command"], "```", "",
+              f"## 逐题明细（检索深度 {RETRIEVAL_LIMIT}，展示前 {DETAIL_TOP_K}）", "",
               "相似度 = 1 − cosine distance，仅作排序诊断，不代表置信度。位置以原始文件的 UTF-8 字节为单位。", ""]
     for question in report["questions"]:
         hits = report["rankings"][question.question_id]
@@ -280,7 +295,7 @@ def render_report(report: dict) -> str:
                   f"标注出处：`{question.expected_source}`" if question.expected_source else "不参与召回命中率计分。", "",
                   "| 排名 | 文档 | seq | 标题路径 | byte_start:byte_end | token | 相似度 |",
                   "|---:|---|---:|---|---|---:|---:|"]
-        for position, hit in enumerate(hits, start=1):
+        for position, hit in enumerate(hits[:DETAIL_TOP_K], start=1):
             lines.append(
                 f"| {position} | {_cell(hit['source'])} | {hit['seq']} | {_cell(hit['heading_path'])} | "
                 f"{hit['byte_start']}:{hit['byte_end']} | {hit['token_count']} | {1 - hit['distance']:.6f} |"
@@ -397,8 +412,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Report: {arguments.output}")
     else:
         print(rendered)
-    print(f"Q: {metrics['Q']['hits']}/{metrics['Q']['total']}; R: {metrics['R']['hits']}/{metrics['R']['total']}; "
-          f"overall: {metrics['overall']['hits']}/{metrics['overall']['total']}")
+    for label, key in (("Q", "Q"), ("R", "R"), ("Q+R", "overall")):
+        metric = metrics[key]
+        print(label + ": " + ", ".join(f"hit@{k}={metric['hits_at_k'][k]}/{metric['total']}"
+                                       for k in K_VALUES))
     return 0
 
 
