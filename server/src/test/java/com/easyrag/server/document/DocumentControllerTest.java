@@ -41,6 +41,9 @@ class DocumentControllerTest {
     @MockitoBean
     private DocumentQueryRepository documents;
 
+    @MockitoBean
+    private DocumentDeletionService deletion;
+
     @Test
     @DisplayName("上传成功：201，立即返回 PENDING，不等待索引")
     void returnsCreatedWithPendingStatus() throws Exception {
@@ -181,5 +184,61 @@ class DocumentControllerTest {
                 .andExpect(jsonPath("$.error").value("文档不存在或已删除"));
 
         then(documents).should(never()).findChunks(999L);
+    }
+
+    @Test
+    @DisplayName("删除成功：204 无响应体（U2）")
+    void deletesDocumentWithNoContent() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/documents/42"))
+                .andExpect(status().isNoContent());
+
+        then(deletion).should().delete(42L);
+    }
+
+    @Test
+    @DisplayName("删除不存在：404")
+    void mapsDeletionNotFound() throws Exception {
+        org.mockito.BDDMockito.willThrow(new DocumentDeletionService.NotFound())
+                .given(deletion).delete(999L);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/documents/999"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("文档不存在或已删除"));
+    }
+
+    @Test
+    @DisplayName("删除时闸门被占：503 携带 state")
+    void mapsDeletionBusyToServiceUnavailable() throws Exception {
+        org.mockito.BDDMockito.willThrow(new DocumentDeletionService.Unavailable("MUTATING"))
+                .given(deletion).delete(42L);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/documents/42"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.error").value("删除暂不可用，请稍后重试"))
+                .andExpect(jsonPath("$.state").value("MUTATING"));
+    }
+
+    @Test
+    @DisplayName("索引清理失败：502，明确说文档未删除")
+    void mapsIndexCleanupFailureToBadGateway() throws Exception {
+        org.mockito.BDDMockito.willThrow(
+                        new DocumentDeletionService.IndexCleanupFailed(new RuntimeException("upstream down")))
+                .given(deletion).delete(42L);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/documents/42"))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.error").value("索引清理暂不可用，文档未删除，请稍后重试"));
+    }
+
+    @Test
+    @DisplayName("落库失败：500，文档保持原状")
+    void mapsStoreFailureToServerError() throws Exception {
+        org.mockito.BDDMockito.willThrow(
+                        new DocumentDeletionService.StoreFailed(new RuntimeException("db down")))
+                .given(deletion).delete(42L);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/documents/42"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.error").value("删除失败，文档保持原状，请稍后重试"));
     }
 }

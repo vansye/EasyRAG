@@ -2,6 +2,7 @@ package com.easyrag.server.document;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -34,10 +35,13 @@ public class DocumentController {
 
     private final DocumentIntakeService intake;
     private final DocumentQueryRepository documents;
+    private final DocumentDeletionService deletion;
 
-    public DocumentController(DocumentIntakeService intake, DocumentQueryRepository documents) {
+    public DocumentController(DocumentIntakeService intake, DocumentQueryRepository documents,
+                              DocumentDeletionService deletion) {
         this.intake = intake;
         this.documents = documents;
+        this.deletion = deletion;
     }
 
     @PostMapping
@@ -85,6 +89,13 @@ public class DocumentController {
         return new ChunkList(documents.findChunks(id));
     }
 
+    /** 删除（A-2，U2）：先清索引后落库（方案 A），编排与失败语义见 DocumentDeletionService。 */
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@PathVariable("id") long id) {
+        deletion.delete(id);
+    }
+
     /** 调用方错误：收录被拒（面向用户的原因）或查询参数非法，统一 400。 */
     @ExceptionHandler({DocumentIntakeService.Rejected.class, BadRequest.class})
     public ResponseEntity<Map<String, String>> badRequest(RuntimeException failure) {
@@ -92,9 +103,29 @@ public class DocumentController {
     }
 
     /** 不存在或已软删：404，与"从未存在"不可区分（对前端两者是同一件事）。 */
-    @ExceptionHandler(NotFound.class)
-    public ResponseEntity<Map<String, String>> notFound(NotFound failure) {
+    @ExceptionHandler({NotFound.class, DocumentDeletionService.NotFound.class})
+    public ResponseEntity<Map<String, String>> notFound(RuntimeException failure) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "文档不存在或已删除"));
+    }
+
+    /** 删除时闸门不可用：503 携带状态，前端可区分"稍后再试"与"删除失败"。 */
+    @ExceptionHandler(DocumentDeletionService.Unavailable.class)
+    public ResponseEntity<Map<String, String>> deletionUnavailable(DocumentDeletionService.Unavailable failure) {
+        return ResponseEntity.status(503)
+                .body(Map.of("error", "删除暂不可用，请稍后重试", "state", failure.state()));
+    }
+
+    /** Python 清索引失败：文档保持原状（未删除），502 归因给上游。 */
+    @ExceptionHandler(DocumentDeletionService.IndexCleanupFailed.class)
+    public ResponseEntity<Map<String, String>> indexCleanupFailed(DocumentDeletionService.IndexCleanupFailed failure) {
+        return ResponseEntity.status(502).body(Map.of("error", "索引清理暂不可用，文档未删除，请稍后重试"));
+    }
+
+    /** MySQL 落库失败：事务回滚，文档保持原状，500 如实归因给自身。 */
+    @ExceptionHandler(DocumentDeletionService.StoreFailed.class)
+    public ResponseEntity<Map<String, String>> storeFailed(DocumentDeletionService.StoreFailed failure) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("error", "删除失败，文档保持原状，请稍后重试"));
     }
 
     /**
