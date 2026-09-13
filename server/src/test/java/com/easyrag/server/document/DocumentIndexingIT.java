@@ -234,8 +234,11 @@ class DocumentIndexingIT {
                 }
             }
             assertThat(vector).isNotNull();
-            assertThat(vector.path("document").stringValue()).isEqualTo(chunk.text()
-                    + (chunk.headingPath().isEmpty() ? "" : "\n" + chunk.headingPath()));
+            // documents 载荷是纯正文，不是 embedding 输入的拼接串（PR #24 的
+            // 载荷修正）：检索结果要直接交给 LLM 与溯源展示，存拼接串就得为拿
+            // 干净原文反向查 Java——那是依赖循环的入口。heading_path 在
+            // metadata 里单独校验，不随载荷丢失。
+            assertThat(vector.path("document").stringValue()).isEqualTo(chunk.text());
             assertThat(vector.path("metadata").path("document_id").longValue()).isEqualTo(documentId);
             assertThat(vector.path("metadata").path("seq").intValue()).isEqualTo(sequence);
             assertThat(vector.path("metadata").path("heading_path").stringValue()).isEqualTo(chunk.headingPath());
