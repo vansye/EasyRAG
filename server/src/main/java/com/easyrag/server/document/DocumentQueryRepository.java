@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * document 的收录写入与读侧查询。
@@ -87,6 +88,63 @@ public class DocumentQueryRepository {
     public List<Long> findPendingIds() {
         return jdbcTemplate.queryForList(
                 "SELECT id FROM document WHERE deleted_at IS NULL AND index_status = 'PENDING' ORDER BY id", Long.class);
+    }
+
+    /**
+     * 单篇详情（A-2）。chunk_count 沿用列表的实时 COUNT 口径（A1-3：列是缓存，
+     * COUNT 是事实）；index_error 如实透出，FAILED 的排查入口就在这里。
+     */
+    public Optional<DocumentDetail> findDetail(long documentId) {
+        return jdbcTemplate.query("""
+                SELECT d.id, d.title, d.content, d.tags, d.source_type, d.source_uri,
+                       d.index_status, d.index_error, d.created_at, d.updated_at,
+                       (SELECT COUNT(*) FROM chunk c WHERE c.document_id = d.id) AS chunk_count
+                FROM document d
+                WHERE d.id = ? AND d.deleted_at IS NULL
+                """, this::mapDetail, documentId).stream().findFirst();
+    }
+
+    /** 切片透明度接口的数据侧（A-2 §三）：一篇的 chunk 按 seq 排序。 */
+    public List<ChunkRow> findChunks(long documentId) {
+        return jdbcTemplate.query("""
+                SELECT id, seq, text, char_start, char_end, heading_path, token_count
+                FROM chunk
+                WHERE document_id = ?
+                ORDER BY seq
+                """, this::mapChunkRow, documentId);
+    }
+
+    /** 切片接口的 404 判定：文档现存且未软删（chunk 硬删保证已删文档无残留切片）。 */
+    public boolean existsActive(long documentId) {
+        Long count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM document WHERE id = ? AND deleted_at IS NULL", Long.class, documentId);
+        return count != null && count > 0;
+    }
+
+    private DocumentDetail mapDetail(ResultSet resultSet, int rowNumber) throws SQLException {
+        return new DocumentDetail(
+                resultSet.getLong("id"),
+                resultSet.getString("title"),
+                resultSet.getString("content"),
+                readTags(resultSet.getString("tags")),
+                resultSet.getString("source_type"),
+                resultSet.getString("source_uri"),
+                resultSet.getString("index_status"),
+                resultSet.getString("index_error"),
+                resultSet.getInt("chunk_count"),
+                resultSet.getTimestamp("created_at").toLocalDateTime(),
+                resultSet.getTimestamp("updated_at").toLocalDateTime());
+    }
+
+    private ChunkRow mapChunkRow(ResultSet resultSet, int rowNumber) throws SQLException {
+        return new ChunkRow(
+                resultSet.getLong("id"),
+                resultSet.getInt("seq"),
+                resultSet.getString("text"),
+                resultSet.getInt("char_start"),
+                resultSet.getInt("char_end"),
+                resultSet.getString("heading_path"),
+                resultSet.getInt("token_count"));
     }
 
     /**
@@ -179,6 +237,31 @@ public class DocumentQueryRepository {
             tags = List.copyOf(tags);
         }
     }
+
+    public record DocumentDetail(@JsonProperty("id") long id,
+                                 @JsonProperty("title") String title,
+                                 @JsonProperty("content") String content,
+                                 @JsonProperty("tags") List<String> tags,
+                                 @JsonProperty("source_type") String sourceType,
+                                 @JsonProperty("source_uri") String sourceUri,
+                                 @JsonProperty("index_status") String indexStatus,
+                                 @JsonProperty("index_error") String indexError,
+                                 @JsonProperty("chunk_count") int chunkCount,
+                                 @JsonProperty("created_at") LocalDateTime createdAt,
+                                 @JsonProperty("updated_at") LocalDateTime updatedAt) {
+        public DocumentDetail {
+            tags = List.copyOf(tags);
+        }
+    }
+
+    /** 对外 byte_start/byte_end 映射自物理列 char_start/char_end（B-13 口径，同 ChunkSource）。 */
+    public record ChunkRow(@JsonProperty("id") long chunkId,
+                           @JsonProperty("seq") int seq,
+                           @JsonProperty("text") String text,
+                           @JsonProperty("byte_start") int byteStart,
+                           @JsonProperty("byte_end") int byteEnd,
+                           @JsonProperty("heading_path") String headingPath,
+                           @JsonProperty("token_count") int tokenCount) {}
 
     public record DocumentPage(@JsonProperty("total") long total,
                                @JsonProperty("items") List<DocumentSummary> items) {
