@@ -2,6 +2,8 @@ package com.easyrag.server.document;
 
 import com.easyrag.server.rag.RagOperationGate;
 import com.easyrag.server.rag.RagOperationGate.Operation;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -28,6 +30,8 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/questions")
 public class QuestionController {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(QuestionController.class);
 
     private final RagOperationGate gate;
     private final RagQueryClient ragQueryClient;
@@ -77,9 +81,16 @@ public class QuestionController {
         return ResponseEntity.status(503).body(Map.of("error", "问答暂不可用", "state", failure.state));
     }
 
-    /** Python /query 不可达或响应异常：如实 502，归因给上游而不是吞掉。 */
+    /**
+     * Python /query 不可达或响应异常：如实 502，归因给上游而不是吞掉。
+     *
+     * 对外只给一句话（不泄漏内部细节），但必须记日志——否则线上只能看到
+     * "暂时不可用"，连"是超时还是响应畸形"都分不出来。排查时第一手材料
+     * 就在这里（与分层健康检查同一条判据：报告要能支撑归因）。
+     */
     @ExceptionHandler({RestClientException.class, IllegalArgumentException.class})
     public ResponseEntity<Map<String, String>> upstream(RuntimeException failure) {
+        LOGGER.warn("question upstream failed: {}", failure.toString(), failure);
         return ResponseEntity.status(502).body(Map.of("error", "问答服务暂时不可用"));
     }
 

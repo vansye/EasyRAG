@@ -53,3 +53,8 @@ rag:
   base-url: ${RAG_BASE_URL:http://localhost:8000}
   connect-timeout-ms: ${RAG_CONNECT_TIMEOUT_MS:3000}
   read-timeout-ms: ${RAG_READ_TIMEOUT_MS:60000}
+  # 问答独立超时：耗时特征与索引完全不同——索引是批量 embedding（快且线性），
+  # 问答是两次 LLM 生成（判定 + 生成），本地 7b 实测单次约 55 秒，卡在 60 秒
+  # 边缘会偶发 502。云端 API 通常 5-15 秒，但超时要按最慢的部署形态定
+  # （C-5：本地与 API 都要能跑）。
+  query-read-timeout-ms: ${RAG_QUERY_READ_TIMEOUT_MS:180000}
