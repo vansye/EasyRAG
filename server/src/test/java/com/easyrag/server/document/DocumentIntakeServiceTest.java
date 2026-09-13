@@ -108,7 +108,7 @@ class DocumentIntakeServiceTest {
     @Test
     @DisplayName("超过 1 MB：拒绝且提示能看出实际大小与上限的差异，不入库不触发")
     void rejectsOversizeWithActualSizeInMessage() {
-        byte[] oversize = new byte[DocumentIntakeService.MAX_CONTENT_BYTES + 1];
+        byte[] oversize = new byte[DocumentContent.MAX_CONTENT_BYTES + 1];
 
         assertThatThrownBy(() -> service.intake("大文件.md", oversize))
                 .isInstanceOf(DocumentIntakeService.Rejected.class)
@@ -126,7 +126,7 @@ class DocumentIntakeServiceTest {
     @DisplayName("恰好 1 MB 的边界放行")
     void acceptsExactlyOneMegabyte() {
         given(documents.insertPending(any())).willReturn(1L);
-        byte[] boundary = new byte[DocumentIntakeService.MAX_CONTENT_BYTES];
+        byte[] boundary = new byte[DocumentContent.MAX_CONTENT_BYTES];
         java.util.Arrays.fill(boundary, (byte) 'a');
 
         assertThat(service.intake("边界.md", boundary).id()).isEqualTo(1L);

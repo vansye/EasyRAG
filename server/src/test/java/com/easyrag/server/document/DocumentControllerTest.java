@@ -3,6 +3,7 @@ package com.easyrag.server.document;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -19,6 +20,8 @@ import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -43,6 +46,9 @@ class DocumentControllerTest {
 
     @MockitoBean
     private DocumentDeletionService deletion;
+
+    @MockitoBean
+    private DocumentUpdateService update;
 
     @Test
     @DisplayName("上传成功：201，立即返回 PENDING，不等待索引")
@@ -240,5 +246,91 @@ class DocumentControllerTest {
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/documents/42"))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.error").value("删除失败，文档保持原状，请稍后重试"));
+    }
+
+    @Test
+    @DisplayName("PUT multipart：200，返回 PENDING 与 reindexed=true")
+    void updatesByUpload() throws Exception {
+        given(update.updateFromUpload(eq(42L), eq("新版.md"), any(byte[].class)))
+                .willReturn(new DocumentUpdateService.UpdateResult(42L, "PENDING", true));
+
+        mockMvc.perform(multipart("/api/documents/42")
+                        .file(new MockMultipartFile("file", "新版.md", "text/markdown",
+                                "# 新标题\n新正文".getBytes(StandardCharsets.UTF_8)))
+                        .with(request -> {
+                            request.setMethod("PUT");
+                            return request;
+                        }))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(42))
+                .andExpect(jsonPath("$.index_status").value("PENDING"))
+                .andExpect(jsonPath("$.reindexed").value(true));
+    }
+
+    @Test
+    @DisplayName("PUT JSON：哈希不变时 reindexed=false，保留原状态")
+    void updatesByTextWithoutReindex() throws Exception {
+        given(update.updateFromText(42L, "# 标题\n正文"))
+                .willReturn(new DocumentUpdateService.UpdateResult(42L, "INDEXED", false));
+
+        mockMvc.perform(put("/api/documents/42")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\": \"# 标题\\n正文\"}".getBytes(StandardCharsets.UTF_8)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.index_status").value("INDEXED"))
+                .andExpect(jsonPath("$.reindexed").value(false));
+    }
+
+    @Test
+    @DisplayName("PUT JSON：缺 content 字段返回 400")
+    void rejectsUpdateWithoutContent() throws Exception {
+        mockMvc.perform(put("/api/documents/42")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("content 不能为空"));
+
+        then(update).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("PUT：文档不存在 404，闸门被占 503")
+    void mapsUpdateFailures() throws Exception {
+        org.mockito.BDDMockito.willThrow(new DocumentUpdateService.NotFound())
+                .given(update).updateFromText(999L, "正文");
+        org.mockito.BDDMockito.willThrow(new DocumentUpdateService.Unavailable("MUTATING"))
+                .given(update).updateFromText(43L, "正文");
+
+        mockMvc.perform(put("/api/documents/999").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\": \"正文\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("文档不存在或已删除"));
+        mockMvc.perform(put("/api/documents/43").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\": \"正文\"}"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.state").value("MUTATING"));
+    }
+
+    @Test
+    @DisplayName("reindex：202 返回 PENDING")
+    void acceptsReindex() throws Exception {
+        given(update.reindex(42L)).willReturn(
+                new DocumentUpdateService.UpdateResult(42L, "PENDING", true));
+
+        mockMvc.perform(post("/api/documents/42/reindex"))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.index_status").value("PENDING"))
+                .andExpect(jsonPath("$.reindexed").value(true));
+    }
+
+    @Test
+    @DisplayName("reindex：在途返回 409，与「不存在」可区分")
+    void mapsInFlightReindexToConflict() throws Exception {
+        org.mockito.BDDMockito.willThrow(new DocumentUpdateService.InFlight())
+                .given(update).reindex(42L);
+
+        mockMvc.perform(post("/api/documents/42/reindex"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value("文档正在索引或已在队列中，无需重复提交"));
     }
 }

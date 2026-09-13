@@ -1,12 +1,15 @@
 package com.easyrag.server.document;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -36,12 +39,14 @@ public class DocumentController {
     private final DocumentIntakeService intake;
     private final DocumentQueryRepository documents;
     private final DocumentDeletionService deletion;
+    private final DocumentUpdateService update;
 
     public DocumentController(DocumentIntakeService intake, DocumentQueryRepository documents,
-                              DocumentDeletionService deletion) {
+                              DocumentDeletionService deletion, DocumentUpdateService update) {
         this.intake = intake;
         this.documents = documents;
         this.deletion = deletion;
+        this.update = update;
     }
 
     @PostMapping
@@ -96,6 +101,39 @@ public class DocumentController {
         deletion.delete(id);
     }
 
+    /**
+     * 更新正文（A-2，U3）——multipart 形态：换一个文件覆盖原文。
+     *
+     * 两种形态分成两个方法而不是一个方法内判断 content type：Spring 按
+     * consumes 分派本就支持，手写判断反而要处理"两个都给了/都没给"的组合。
+     */
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public DocumentUpdateService.UpdateResult updateByUpload(
+            @PathVariable("id") long id, @RequestParam("file") MultipartFile file) {
+        try {
+            return update.updateFromUpload(id, file.getOriginalFilename(), file.getBytes());
+        } catch (IOException failure) {
+            throw new UncheckedIOException(failure);
+        }
+    }
+
+    /** 更新正文——JSON 形态：直接提交新正文，标题降级到文档现有标题。 */
+    @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public DocumentUpdateService.UpdateResult updateByText(
+            @PathVariable("id") long id, @RequestBody ContentUpdate body) {
+        if (body == null || body.content() == null) {
+            throw new BadRequest("content 不能为空");
+        }
+        return update.updateFromText(id, body.content());
+    }
+
+    /** 手动重索引（A-2）：FAILED 与 INDEXED 均可，PENDING/INDEXING 返回 409。 */
+    @PostMapping("/{id}/reindex")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public DocumentUpdateService.UpdateResult reindex(@PathVariable("id") long id) {
+        return update.reindex(id);
+    }
+
     /** 调用方错误：收录被拒（面向用户的原因）或查询参数非法，统一 400。 */
     @ExceptionHandler({DocumentIntakeService.Rejected.class, BadRequest.class})
     public ResponseEntity<Map<String, String>> badRequest(RuntimeException failure) {
@@ -103,9 +141,24 @@ public class DocumentController {
     }
 
     /** 不存在或已软删：404，与"从未存在"不可区分（对前端两者是同一件事）。 */
-    @ExceptionHandler({NotFound.class, DocumentDeletionService.NotFound.class})
+    @ExceptionHandler({NotFound.class, DocumentDeletionService.NotFound.class,
+            DocumentUpdateService.NotFound.class})
     public ResponseEntity<Map<String, String>> notFound(RuntimeException failure) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "文档不存在或已删除"));
+    }
+
+    /** 已在队列或索引在途：409，与"文档不存在"必须可区分。 */
+    @ExceptionHandler(DocumentUpdateService.InFlight.class)
+    public ResponseEntity<Map<String, String>> inFlight(DocumentUpdateService.InFlight failure) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("error", "文档正在索引或已在队列中，无需重复提交"));
+    }
+
+    /** 更新时闸门不可用：503 携带状态。 */
+    @ExceptionHandler(DocumentUpdateService.Unavailable.class)
+    public ResponseEntity<Map<String, String>> updateUnavailable(DocumentUpdateService.Unavailable failure) {
+        return ResponseEntity.status(503)
+                .body(Map.of("error", "更新暂不可用，请稍后重试", "state", failure.state()));
     }
 
     /** 删除时闸门不可用：503 携带状态，前端可区分"稍后再试"与"删除失败"。 */
@@ -153,4 +206,6 @@ public class DocumentController {
     }
 
     record ChunkList(@JsonProperty("items") List<DocumentQueryRepository.ChunkRow> items) {}
+
+    record ContentUpdate(@JsonProperty("content") String content) {}
 }
