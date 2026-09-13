@@ -159,3 +159,20 @@ class TestAnswerQuestion:
         pipeline = QaPipeline(settings=settings, index=IndexStore(settings), model=model)
         with pytest.raises(QaError):
             pipeline.answer_question("问题")
+
+    def test_llm_upstream_exception_becomes_qa_error(self, settings, monkeypatch):
+        """LangChain 的异常族（超时、连接失败）必须收口成 QaError。
+
+        端到端实测发现：本地模型生成超时抛 OpenAITimeoutError，它既不是
+        httpx 异常也不是 QaError，会逃逸 /query 的 handler 变成裸 500——
+        调用方分不出"模型超时"和"服务崩了"。
+        """
+        class _TimingOut:
+            @staticmethod
+            def invoke(messages):
+                raise RuntimeError("Request timed out.")
+
+        _fake_embedding_vector(monkeypatch, [1.0, 0.0, 0.0])
+        pipeline = QaPipeline(settings=settings, index=IndexStore(settings), model=_TimingOut())
+        with pytest.raises(QaError, match="RuntimeError"):
+            pipeline.answer_question("问题")

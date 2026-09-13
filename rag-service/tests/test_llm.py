@@ -267,12 +267,26 @@ def test_model_propagates_upstream_failure_without_retry(monkeypatch):
     assert len(requests) == 1
 
 
-def test_env_example_contains_usable_local_llm_configuration():
+def test_env_example_documents_all_required_llm_keys():
+    """.env.example 是模板，不是可直接运行的配置。
+
+    C-5 定了"API 为主"之后，模板不该内置任何可用端点——用户必须自己填
+    密钥与地址。所以这里验的是"模板完整"（必填键齐全、形式正确），
+    而不是"模板开箱即用"（旧口径，会迫使模板长期内置本地 Ollama 默认值）。
+    """
     env_file = Path(__file__).resolve().parents[1] / ".env.example"
+    text = env_file.read_text(encoding="utf-8")
 
-    settings = config.LlmSettings(_env_file=env_file)
+    # LlmSettings 的必填项必须在模板里出现，否则新人不知道要配什么
+    for required_key in ("LLM_PROVIDER", "LLM_MODEL", "LLM_BASE_URL", "LLM_API_KEY"):
+        assert f"{required_key}=" in text, f"{required_key} 缺失，新人照抄会漏配"
 
-    assert settings.provider == "openai"
-    assert str(settings.base_url) == "http://localhost:11434/v1"
-    assert settings.api_key.get_secret_value() == "ollama"
-    assert settings.model
+    # 占位符形式：不能留真实密钥或可用端点（否则等于内置了一套默认配置）
+    assert "LLM_MODEL=<" in text
+    assert "LLM_API_KEY=<" in text
+    # provider 仍给确定值——它是枚举，不是用户自由填的
+    assert "LLM_PROVIDER=openai" in text
+    # 超时按最慢部署形态（本地模型）定，不能退回 60 秒
+    assert "LLM_TIMEOUT_SECONDS=180" in text
+    # 三种常见部署形态都要有示例可抄
+    assert "deepseek" in text.lower() and "ollama" in text.lower()

@@ -89,7 +89,7 @@ curl http://localhost:8080/health
 cd rag-service
 python -m venv .venv
 .venv/Scripts/python -m pip install -r requirements.txt   # Linux/macOS: .venv/bin/python
-cp .env.example .env                                      # 按需修改模型配置
+cp .env.example .env                                      # 然后填入 LLM 配置（见下方"LLM 配置"）
 ```
 
 默认配置用 Ollama 的 `bge-m3`（1024 维）。除拉模型外还需下载 tokenizer（约 16 MB，被 .gitignore 挡在仓库外，不下载则 `/chunk` 返回 503 `TOKENIZER_UNAVAILABLE`）：
@@ -109,6 +109,8 @@ curl http://localhost:8000/health
 ```
 
 `embedding.status` 为 `DOWN` 且 `error` 为 `MODEL_NOT_FOUND` 表示配置的模型没拉下来，响应里会列出实际可用的模型。换模型需同时改 `EMBEDDING_MODEL` 与 `EMBEDDING_DIM`——两者不一致时服务拒绝启动并提示重建（维度错配若不拦住，报错会推迟到检索时才爆，且表现为距离计算异常）。
+
+**LLM 配置**（`.env`，模板里是占位符，必须自己填）：`LLM_MODEL` 与 `LLM_API_KEY` 必填，`LLM_BASE_URL` 可省略以使用适配器默认地址——不填则提问返回 503 `LLM_NOT_CONFIGURED`（"没配"与"挂了"是两种不同的故障）。三种常见写法（DeepSeek / OpenAI / 本地 Ollama）抄 `.env.example` 内注释即可；本地 Ollama 走 OpenAI 兼容端点 `http://localhost:11434/v1`，占位 key 填 `ollama`。超时默认 180 秒，按最慢部署形态（本地 7b 单问实测 72-83 秒）定。
 
 ### 3. 测试
 

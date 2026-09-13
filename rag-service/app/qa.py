@@ -156,7 +156,15 @@ class QaPipeline:
     def _invoke_model(self, prompt: str) -> str:
         if self.model is None:
             self.model = create_chat_model(self.llm_settings)
-        response = self.model.invoke([HumanMessage(content=prompt)])
+        try:
+            response = self.model.invoke([HumanMessage(content=prompt)])
+        except Exception as exc:
+            # LangChain 把上游错误包成自己的异常族（OpenAITimeoutError、
+            # APIConnectionError 等），它们既不是 httpx 异常也不是 QaError——
+            # 不在这里收口就会逃逸成裸 500，调用方无法区分"模型超时"与
+            # "服务崩了"。统一转成 QaError（→ 503 LLM_UNAVAILABLE），
+            # 保留原异常类名供归因。
+            raise QaError(f"model invocation failed: {type(exc).__name__}") from exc
         content = response.content
         if not isinstance(content, str) or not content.strip():
             raise QaError("model returned empty or non-text content")

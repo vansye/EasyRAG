@@ -39,7 +39,7 @@ public class RagQueryClient {
 
     public RagQueryClient(@Value("${rag.base-url}") String baseUrl,
                           @Value("${rag.connect-timeout-ms}") int connectTimeoutMillis,
-                          @Value("${rag.read-timeout-ms}") int readTimeoutMillis) {
+                          @Value("${rag.query-read-timeout-ms}") int readTimeoutMillis) {
         if (connectTimeoutMillis <= 0 || readTimeoutMillis <= 0) {
             throw new IllegalArgumentException("rag timeouts must be positive milliseconds");
         }

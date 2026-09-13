@@ -14,6 +14,7 @@ from functools import lru_cache
 from typing import Annotated, Any, Self
 
 import httpx
+import pydantic
 from fastapi import FastAPI, HTTPException, Path
 from pydantic import BaseModel, Field, field_validator, model_validator
 from tokenizers import Tokenizer
@@ -259,6 +260,13 @@ def answer_question(payload: QaRequest) -> QaResponse:
         raise HTTPException(status_code=503, detail={
             "error": "LLM_UNAVAILABLE", "cause": "QA_PIPELINE",
             "detail": str(exc)[:200],
+        }) from exc
+    except pydantic.ValidationError as exc:
+        # LlmSettings 缺必填项（未配置 LLM_ 环境变量）：这是部署配置缺失，
+        # 不是运行期故障。给出可操作的错误码而不是裸 500——Java 侧与运维
+        # 都需要能区分"模型没配"和"模型挂了"。
+        raise HTTPException(status_code=503, detail={
+            "error": "LLM_NOT_CONFIGURED", "cause": "ValidationError",
         }) from exc
     except (httpx.HTTPError, EmbeddingResponseError) as exc:
         raise HTTPException(status_code=503, detail={
