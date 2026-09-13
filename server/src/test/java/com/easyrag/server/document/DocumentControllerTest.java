@@ -16,6 +16,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -113,5 +114,72 @@ class DocumentControllerTest {
                 .andExpect(status().isBadRequest());
         mockMvc.perform(get("/api/documents").param("size", "101"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("详情：200，全字段含 content 与 index_error，chunk_count 实时口径")
+    void returnsDetailWithAllFields() throws Exception {
+        given(documents.findDetail(42L)).willReturn(java.util.Optional.of(
+                new DocumentQueryRepository.DocumentDetail(
+                        42L, "KV Cache", "# KV Cache\n正文", List.of("redis"), "UPLOAD",
+                        "笔记.md", "FAILED", "stage=CHUNK; failure=RestClientException", 3,
+                        LocalDateTime.of(2026, 9, 12, 5, 0),
+                        LocalDateTime.of(2026, 9, 12, 6, 0))));
+
+        mockMvc.perform(get("/api/documents/42"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(42))
+                .andExpect(jsonPath("$.title").value("KV Cache"))
+                .andExpect(jsonPath("$.content").value("# KV Cache\n正文"))
+                .andExpect(jsonPath("$.tags[0]").value("redis"))
+                .andExpect(jsonPath("$.source_type").value("UPLOAD"))
+                .andExpect(jsonPath("$.source_uri").value("笔记.md"))
+                .andExpect(jsonPath("$.index_status").value("FAILED"))
+                .andExpect(jsonPath("$.index_error").value("stage=CHUNK; failure=RestClientException"))
+                .andExpect(jsonPath("$.chunk_count").value(3))
+                .andExpect(jsonPath("$.created_at").value("2026-09-12T05:00:00"))
+                .andExpect(jsonPath("$.updated_at").value("2026-09-12T06:00:00"));
+    }
+
+    @Test
+    @DisplayName("详情：不存在或已删除返回 404")
+    void mapsMissingDetailToNotFound() throws Exception {
+        given(documents.findDetail(999L)).willReturn(java.util.Optional.empty());
+
+        mockMvc.perform(get("/api/documents/999"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("文档不存在或已删除"));
+    }
+
+    @Test
+    @DisplayName("切片透明度：200，按 seq 排序，char_* 列以 byte_* 对外（B-13）")
+    void listsChunksWithByteOffsetNaming() throws Exception {
+        given(documents.existsActive(42L)).willReturn(true);
+        given(documents.findChunks(42L)).willReturn(List.of(
+                new DocumentQueryRepository.ChunkRow(101L, 0, "片段一", 0, 9, "一、标题", 3),
+                new DocumentQueryRepository.ChunkRow(102L, 1, "片段二", 9, 18, "一、标题", 3)));
+
+        mockMvc.perform(get("/api/documents/42/chunks"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].id").value(101))
+                .andExpect(jsonPath("$.items[0].seq").value(0))
+                .andExpect(jsonPath("$.items[0].text").value("片段一"))
+                .andExpect(jsonPath("$.items[0].byte_start").value(0))
+                .andExpect(jsonPath("$.items[0].byte_end").value(9))
+                .andExpect(jsonPath("$.items[0].heading_path").value("一、标题"))
+                .andExpect(jsonPath("$.items[0].token_count").value(3))
+                .andExpect(jsonPath("$.items[1].seq").value(1));
+    }
+
+    @Test
+    @DisplayName("切片透明度：文档不存在返回 404，不查切片")
+    void mapsMissingDocumentToNotFoundForChunks() throws Exception {
+        given(documents.existsActive(999L)).willReturn(false);
+
+        mockMvc.perform(get("/api/documents/999/chunks"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("文档不存在或已删除"));
+
+        then(documents).should(never()).findChunks(999L);
     }
 }

@@ -141,6 +141,61 @@ class DocumentQueryRepositoryIT {
                 .containsExactly("第1篇");
     }
 
+    @Test
+    void findDetailReturnsStoredDocumentWithLiveChunkCount() {
+        long id = insertDocument("详情.md", "FAILED");
+        jdbcTemplate.update(
+                "UPDATE document SET content = '# 详情\n正文', index_error = 'stage=CHUNK; failure=Boom' WHERE id = ?",
+                id);
+        jdbcTemplate.update("""
+                INSERT INTO chunk (document_id, seq, text, char_start, char_end, heading_path, token_count)
+                VALUES (?, 0, '片段', 0, 6, '一、标题', 2)
+                """, id);
+
+        var detail = repository.findDetail(id).orElseThrow();
+
+        assertThat(detail.id()).isEqualTo(id);
+        assertThat(detail.title()).isEqualTo("详情");
+        assertThat(detail.content()).isEqualTo("# 详情\n正文");
+        assertThat(detail.sourceUri()).isEqualTo("详情.md");
+        assertThat(detail.indexStatus()).isEqualTo("FAILED");
+        assertThat(detail.indexError()).isEqualTo("stage=CHUNK; failure=Boom");
+        assertThat(detail.chunkCount()).isEqualTo(1);
+        assertThat(detail.createdAt()).isNotNull();
+        assertThat(detail.updatedAt()).isNotNull();
+    }
+
+    @Test
+    void findDetailExcludesSoftDeletedAndMissing() {
+        long deleted = insertDocument("已删.md", "INDEXED");
+        jdbcTemplate.update("UPDATE document SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?", deleted);
+
+        assertThat(repository.findDetail(deleted)).isEmpty();
+        assertThat(repository.findDetail(999999L)).isEmpty();
+        assertThat(repository.existsActive(deleted)).isFalse();
+        assertThat(repository.existsActive(999999L)).isFalse();
+    }
+
+    @Test
+    void findChunksReturnsRowsOrderedBySeqWithByteOffsetNaming() {
+        long id = insertDocument("切片.md", "INDEXED");
+        jdbcTemplate.update("""
+                INSERT INTO chunk (document_id, seq, text, char_start, char_end, heading_path, token_count)
+                VALUES (?, 1, '第二段', 12, 24, '一、标题', 4), (?, 0, '第一段', 0, 12, '一、标题', 4)
+                """, id, id);
+
+        var chunks = repository.findChunks(id);
+
+        assertThat(chunks).hasSize(2);
+        assertThat(chunks.get(0).seq()).isZero();
+        assertThat(chunks.get(0).text()).isEqualTo("第一段");
+        assertThat(chunks.get(0).byteStart()).isZero();
+        assertThat(chunks.get(0).byteEnd()).isEqualTo(12);
+        assertThat(chunks.get(0).headingPath()).isEqualTo("一、标题");
+        assertThat(chunks.get(1).seq()).isEqualTo(1);
+        assertThat(chunks.get(1).byteStart()).isEqualTo(12);
+    }
+
     private long insertDocument(String filename, String status) {
         GeneratedKeyHolder keys = new GeneratedKeyHolder();
         jdbcTemplate.update(connection -> {
