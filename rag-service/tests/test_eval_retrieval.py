@@ -35,8 +35,8 @@ def test_duplicate_questions_fail_instead_of_changing_the_denominator():
         parse_questions("| Q1 | first | a.md |\n| Q1 | duplicate | a.md |")
 
 
-def test_hit_at_five_counts_chunks_not_distinct_documents():
-    from scripts.eval_retrieval import Question, first_hit_rank, summarize
+def test_hit_at_k_curve_counts_chunks_not_distinct_documents():
+    from scripts.eval_retrieval import K_VALUES, Question, first_hit_rank, summarize
 
     questions = [
         Question("Q1", "first", "docs/a.md"),
@@ -54,11 +54,14 @@ def test_hit_at_five_counts_chunks_not_distinct_documents():
     }
 
     assert first_hit_rank(questions[0], rankings["Q1"]) == 5
-    assert first_hit_rank(questions[1], rankings["Q2"]) is None
+    # 检索深度从 5 提到 10 后，第 6 名不再是"未命中"——它计入 hit@10
+    assert first_hit_rank(questions[1], rankings["Q2"]) == 6
     metrics = summarize(questions, rankings)
-    assert metrics["Q"] == {"hits": 1, "total": 2, "hit_rate": 0.5}
-    assert metrics["R"] == {"hits": 1, "total": 1, "hit_rate": 1.0}
-    assert metrics["overall"] == {"hits": 2, "total": 3, "hit_rate": 2 / 3}
+    assert metrics["Q"]["total"] == 2
+    assert metrics["Q"]["hits_at_k"] == {1: 0, 3: 0, 5: 1, 10: 2}
+    assert metrics["Q"]["hit_rate_at_k"][5] == 0.5
+    assert metrics["R"]["hits_at_k"] == {k: 1 for k in K_VALUES}
+    assert metrics["overall"]["hits_at_k"] == {1: 1, 3: 1, 5: 2, 10: 3}
     assert metrics["excluded"] == {"N": 1, "P": 1}
 
 
@@ -223,9 +226,11 @@ def test_cli_writes_report_using_real_index_and_explicit_unscored_categories(
 
     assert status == 0
     contents = report.read_text(encoding="utf-8")
-    assert "| Q | 1/1 | 100.00% |" in contents
-    assert "| R | 1/1 | 100.00% |" in contents
-    assert "| Q+R | 2/2 | 100.00% |" in contents
+    curve_row = " | ".join("1/1（100.00%）" for _ in range(4))
+    assert f"| Q | {curve_row} |" in contents
+    assert f"| R | {curve_row} |" in contents
+    assert f"| Q+R | " + " | ".join("2/2（100.00%）" for _ in range(4)) + " |" in contents
+    assert "漏召回题（前 10 均未命中）：无。" in contents
     assert "### N1 · 未评分" in contents
     assert "### P1 · 未评分" in contents
     assert "model-fixture-digest" in contents
@@ -233,7 +238,9 @@ def test_cli_writes_report_using_real_index_and_explicit_unscored_categories(
     assert hashlib.sha256(tokenizer.read_bytes()).hexdigest() in contents
     assert "UTF-8" in contents and "byte_start" in contents
     assert "scripts.eval_retrieval" in contents
-    assert "Q: 1/1" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert "Q: hit@1=1/1" in output
+    assert "hit@5=2/2" in output
     assert sum(request.url.path == "/api/embed" for request in requests) == 2
 
 
