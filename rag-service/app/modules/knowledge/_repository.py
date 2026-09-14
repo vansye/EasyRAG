@@ -10,7 +10,7 @@ from ._database import Database, DatabaseSettings
 from ._intake import content_hash, java_strip, metadata, prepare_upload, validate_content
 from ._schema import chunk, document
 from ._types import (
-    ChunkWrite, DatabaseUnavailable, Document, DocumentNotFound, DocumentPage, DocumentSummary,
+    ChunkWrite, DatabaseUnavailable, Document, DocumentNotFound, DocumentPage, DocumentSnapshot, DocumentSummary,
     IndexStateConflict, InputRejected, Source, StoredChunk, UpdateResult,
 )
 from ._validation import validate_chunks, validate_index_error
@@ -46,8 +46,16 @@ def _get(connection, document_id, *, lock=False):
 
 def _chunks(connection, document_id):
     rows = connection.execute(select(chunk).where(chunk.c.document_id == document_id).order_by(chunk.c.seq)).mappings()
-    return tuple(StoredChunk(row['id'], row['document_id'], row['seq'], row['text'], row['char_start'],
-                             row['char_end'], row['heading_path'], row['token_count']) for row in rows)
+    return tuple(_chunk_record(row) for row in rows)
+
+
+def _chunk_record(row):
+    return StoredChunk(row['id'], row['document_id'], row['seq'], row['text'], row['char_start'],
+                       row['char_end'], row['heading_path'], row['token_count'])
+
+
+def _chunk_writes(chunks):
+    return tuple(ChunkWrite(c.seq,c.text,c.byte_start,c.byte_end,c.heading_path,c.token_count) for c in chunks)
 
 
 def _mutable(record):
@@ -212,6 +220,42 @@ class Knowledge:
             ).order_by(chunk.c.id)).mappings()
             return tuple(Source(row['id'], row['document_id'], row['title'], row['text'], row['char_start'],
                                 row['char_end'], row['heading_path']) for row in rows)
+
+    def snapshots(self) -> tuple[DocumentSnapshot, ...]:
+        """Return data and A's own byte/sequence validation for consistency inspection."""
+        with self._transaction() as connection:
+            documents = tuple(_document_record(row) for row in connection.execute(
+                _document_query().order_by(document.c.id)).mappings())
+            by_document = {}
+            rows = connection.execute(select(chunk).join(document).where(document.c.deleted_at.is_(None))
+                                      .order_by(chunk.c.document_id, chunk.c.seq)).mappings()
+            for row in rows:
+                by_document.setdefault(row['document_id'], []).append(_chunk_record(row))
+            snapshots = []
+            for current in documents:
+                chunks = tuple(by_document.get(current.id, ()))
+                valid = True
+                try:
+                    validate_chunks(current.content, _chunk_writes(chunks))
+                except InputRejected:
+                    valid = False
+                snapshots.append(DocumentSnapshot(current, chunks, valid))
+            return tuple(snapshots)
+
+    def begin_rebuild(self, document_id: int, chunks: Sequence[ChunkWrite], *, expected_content: str) -> tuple[StoredChunk, ...]:
+        """Offline recovery entrypoint: keep IDs only when the current split matches exactly."""
+        drafts = tuple(chunks)
+        with self._transaction() as connection:
+            current = _get(connection, document_id, lock=True)
+            if current.content != expected_content:
+                raise IndexStateConflict('document content changed since recovery snapshot')
+            validate_chunks(current.content, drafts)
+            existing = _chunks(connection, document_id)
+            _change(connection, document_id, index_status='INDEXING', index_error=None)
+            if _chunk_writes(existing) == drafts:
+                _change(connection, document_id, chunk_count=len(existing))
+                return existing
+            return _replace_chunks(connection, document_id, drafts)
 
     def initialize_database(self):
         self._require_database().initialize()

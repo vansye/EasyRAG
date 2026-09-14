@@ -5,6 +5,6 @@ from ._database import DatabaseSettings
 from ._repository import Knowledge
 from ._types import (
     ChunkWrite, DatabaseUnavailable, Document, DocumentNotFound, DocumentPage,
-    DocumentSummary, IndexStateConflict, InputRejected, NewDocument, SchemaMismatch,
+    DocumentSnapshot, DocumentSummary, IndexStateConflict, InputRejected, NewDocument, SchemaMismatch,
     Source, StoredChunk, UpdateResult,
 )
