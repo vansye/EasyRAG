@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 
@@ -10,7 +9,7 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from app.config import Settings
+from app.modules.retrieval.public import RetrievalSettings
 
 
 @pytest.fixture(autouse=True)
@@ -26,11 +25,11 @@ def settings_for_test(**overrides):
               "embed_batch_size": 2, "embedding_api_key": "sensitive-key",
               "embedding_timeout_seconds": 7.5}
     values.update(overrides)
-    return Settings(_env_file=None, **values)
+    return RetrievalSettings(_env_file=None, **values)
 
 
 def call_embedding(client, texts, settings):
-    from app.embedding import embed_texts
+    from app.modules.retrieval._embedding import embed_texts
 
     return embed_texts(client, texts, settings=settings)
 
@@ -173,22 +172,22 @@ def test_model_error_stops_later_batches_without_retry():
 
 
 def test_health_uses_the_same_compatible_url_and_credentials(monkeypatch):
-    from app import main
+    from app.modules.retrieval._embedding import probe_embedding
 
     requests = []
-    original_client = httpx.AsyncClient
+    original_client = httpx.Client
 
     def respond(request):
         requests.append(request)
         return httpx.Response(200, json={"data": [{"id": "test-model"}]})
 
-    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: original_client(
+    monkeypatch.setattr(httpx, "Client", lambda **kwargs: original_client(
         transport=httpx.MockTransport(respond), **kwargs,
     ))
 
-    result = asyncio.run(main._probe_embedding(settings_for_test(
+    result = probe_embedding(settings_for_test(
         embedding_provider="openai", embedding_base_url="https://embedding.test/v1/",
-    )))
+    ))
 
     assert result["status"] == "UP"
     assert len(requests) == 1
