@@ -23,7 +23,7 @@ def imported_paths(source: str, package: str) -> list[str]:
     return paths
 
 
-def violations(source: str, package: str, owner: str | None) -> list[str]:
+def violations(source: str, package: str, owner: str | None, *, evaluation=False) -> list[str]:
     denied = []
     for target in imported_paths(source, package):
         root = target.split(".")[0]
@@ -39,9 +39,13 @@ def violations(source: str, package: str, owner: str | None) -> list[str]:
                 denied.append(target)
             if (root.startswith("langchain") or root in {"openai", "httpx2"}) and owner != "answer_models":
                 denied.append(target)
-        elif target.startswith("app.modules."):
-            parts = target.split(".")
-            if len(parts) < 4 or parts[3] != "public":
+        else:
+            if target == "app.modules" or target.startswith("app.modules."):
+                parts = target.split(".")
+                if len(parts) < 4 or parts[3] != "public":
+                    denied.append(target)
+            if not evaluation and (root in {"sqlalchemy", "pymysql", "alembic", "chromadb", "tokenizers", "openai", "httpx2"}
+                                   or root.startswith("langchain")):
                 denied.append(target)
     return denied
 
@@ -55,6 +59,12 @@ def violations(source: str, package: str, owner: str | None) -> list[str]:
     ("from langchain_core.messages import HumanMessage", "app.modules.qa", "qa"),
     ("from app.modules.knowledge._database import engine", "app.application", None),
     ("from ..modules import knowledge", "app.application", None),
+    ("import app.modules", "app.application", None),
+    ("from app import modules", "app.application", None),
+    ("from .. import modules", "app.application", None),
+    ("import sqlalchemy", "app.application", None),
+    ("import chromadb", "app.application", None),
+    ("from openai import OpenAI", "app.application", None),
 ])
 def test_detects_forbidden_dependencies(source, package, owner):
     assert violations(source, package, owner)
@@ -82,6 +92,16 @@ def test_business_modules_exist_and_obey_ownership():
 def test_application_uses_only_public_module_entrypoints():
     directory = APP / "application"
     assert directory.is_dir(), "missing application composition boundary"
-    for path in directory.rglob("*.py"):
+    # These old HTTP adapters remain runnable during the staged migration.
+    # The cutover PR removes both the adapters and this temporary exemption.
+    legacy = {"main.py", "runtime.py", "model_config.py", "llm.py", "qa.py", "retrieval.py",
+              "config.py", "embedding.py", "chunking.py", "index_store.py"}
+    paths = [*directory.rglob("*.py"), *(p for p in APP.glob("*.py") if p.name not in legacy)]
+    for path in paths:
         package = ".".join(path.parent.relative_to(APP.parent).parts)
         assert not violations(path.read_text(encoding="utf-8-sig"), package, None), path
+
+
+def test_offline_tools_use_only_public_business_entrypoints():
+    for path in (APP.parent / "scripts").rglob("*.py"):
+        assert not violations(path.read_text(encoding="utf-8-sig"), "scripts", None, evaluation=True), path
