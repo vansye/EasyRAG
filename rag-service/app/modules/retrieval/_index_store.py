@@ -139,9 +139,10 @@ class IndexStore:
                 raise ChunkIdConflict("chunk_id belongs to another document")
             batch_size = min(self._settings.embed_batch_size, self._client.get_max_batch_size())
             documents = [chunk.text for chunk in chunks]
+            # Chroma 1.5.9 can retain arrays after reset; None explicitly clears old tags.
             metadatas = [
                 {"document_id": document_id, "seq": sequence, "heading_path": chunk.heading_path,
-                 **({"tags": list(chunk.tags)} if chunk.tags else {})}
+                 "tags": list(chunk.tags) if chunk.tags else None}
                 for sequence, chunk in enumerate(chunks)
             ]
             try:

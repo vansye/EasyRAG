@@ -263,6 +263,21 @@ def test_delete_is_idempotent_and_reset_preserves_other_model_collections(module
         comparison.close()
 
 
+def test_rebuild_with_empty_tags_clears_old_arrays_and_preserves_other_collections(module, settings):
+    comparison = retrieval.Retrieval(settings.model_copy(update={"embedding_model": "other-model"}))
+    try:
+        comparison.replace(22, (retrieval.IndexChunk(201, "other", tags=("keep", "中文")),))
+        comparison_before = comparison.inspect()
+        module.replace(11, (retrieval.IndexChunk(101, "first", tags=("old", "中文")),))
+        module.reset()
+        assert module.inspect() == ()
+        assert module.replace(11, (retrieval.IndexChunk(101, "first"),)) == 1
+        assert comparison.inspect() == comparison_before
+        assert module.inspect() == (retrieval.IndexEntry(101, 11, 0, "first", "", ()),)
+    finally:
+        comparison.close()
+
+
 def test_duplicate_and_cross_document_ids_cannot_mutate_an_existing_index(module, offline_embedding):
     module.replace(11, (retrieval.IndexChunk(101, "first"),))
     before = module.inspect()
