@@ -18,7 +18,7 @@ from chromadb.config import Settings as ChromaSettings
 import httpx
 from tokenizers import Tokenizer
 
-from app.chunking import Chunk, split_markdown
+from app.modules.retrieval.public import Chunk, split_markdown, splitter_fingerprint
 
 
 K_VALUES = (1, 3, 5, 10)
@@ -402,8 +402,11 @@ def main(argv: list[str] | None = None) -> int:
         },
         "versions": {"Python": platform.python_version(), "Ollama": ollama_version,
                      **{package: version(package) for package in ("chromadb", "tokenizers", "httpx")}},
-        "code_sha256": {source: hashlib.sha256((SERVICE_DIR / source).read_bytes()).hexdigest()
-                        for source in ("app/chunking.py", "scripts/eval_retrieval.py", "requirements.txt")},
+        "code_sha256": {
+            "retrieval.split_markdown": splitter_fingerprint(),
+            **{source: hashlib.sha256((SERVICE_DIR / source).read_bytes()).hexdigest()
+               for source in ("scripts/eval_retrieval.py", "requirements.txt")},
+        },
         "command": " `\n  ".join(command),
     }
     rendered = render_report(report)

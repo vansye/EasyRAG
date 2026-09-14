@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from functools import lru_cache
+from hashlib import sha256
+from pathlib import Path
 
 import httpx as _httpx
 from tokenizers import Tokenizer as _Tokenizer
@@ -21,7 +23,13 @@ ChunkDraft = Chunk
 __all__ = [
     "Chunk", "ChunkDraft", "ChunkIdConflict", "IndexChunk", "IndexEntry", "IndexMetadataMismatch",
     "IndexWriteError", "Retrieval", "RetrievalSettings", "RetrievalUnavailable", "SearchHit", "split_markdown",
+    "splitter_fingerprint",
 ]
+
+
+def splitter_fingerprint() -> str:
+    """Reproducibility metadata for offline evaluation without exposing private paths."""
+    return sha256(Path(__file__).with_name('_chunking.py').read_bytes()).hexdigest()
 
 
 class RetrievalUnavailable(RuntimeError):

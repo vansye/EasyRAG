@@ -146,7 +146,7 @@ def test_embedding_http_failure_is_not_silently_retried():
 
 
 def test_cosine_retrieval_cleans_up_only_its_ephemeral_collection(monkeypatch):
-    from app.chunking import Chunk
+    from app.modules.retrieval.public import Chunk
     from scripts.eval_retrieval import IndexedChunk, Question, retrieve_chunks
 
     client = chromadb.EphemeralClient(settings=ChromaSettings(anonymized_telemetry=False))
@@ -204,6 +204,14 @@ def test_cli_writes_report_using_real_index_and_explicit_unscored_categories(
     corpus, golden, tokenizer = evaluation_files
     report = tmp_path / "baseline.md"
     requests = []
+    read_bytes = Path.read_bytes
+
+    def read_without_legacy_chunker(path):
+        if path == eval_retrieval.SERVICE_DIR / "app/chunking.py":
+            raise FileNotFoundError("legacy chunker has been removed")
+        return read_bytes(path)
+
+    monkeypatch.setattr(Path, "read_bytes", read_without_legacy_chunker)
 
     def respond(request):
         requests.append(request)
@@ -236,6 +244,7 @@ def test_cli_writes_report_using_real_index_and_explicit_unscored_categories(
     assert "model-fixture-digest" in contents
     assert hashlib.sha256(golden.read_bytes()).hexdigest() in contents
     assert hashlib.sha256(tokenizer.read_bytes()).hexdigest() in contents
+    assert f"- `retrieval.split_markdown` SHA-256: `{eval_retrieval.splitter_fingerprint()}`" in contents
     assert "UTF-8" in contents and "byte_start" in contents
     assert "scripts.eval_retrieval" in contents
     output = capsys.readouterr().out
