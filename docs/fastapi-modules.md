@@ -128,8 +128,8 @@ ChatSession.complete(prompt) -> str
 - [x] C 问答：检索/模型端口注入，保留三态回答与 trace。
 - [x] G 收录索引、更新删除、问答引用：分别接线、测试、PR。
 - [x] G 恢复与维护：竞态、异常退出、缺失/多余/过时索引验证。
-- [ ] D/E 回归：评估流程、前端构建及真实浏览器验收。
-- [ ] CI、启动文档、旧 Java 退出和切换备份。
+- [x] D/E 回归：评估流程、前端构建及真实浏览器验收。
+- [x] CI、启动文档、旧 Java 退出和切换备份。
 
 每批最多编辑 3 个文件，报告文件、目的、受影响边界和验证结果。迁移 PR 顺序叠加在 #34 的代码之后，不自动合并。
 
@@ -143,5 +143,6 @@ ChatSession.complete(prompt) -> str
 | F 配置与会话 / C 问答 / D 评估 | [#44](https://github.com/vansye/EasyRAG/pull/44)、[#46](https://github.com/vansye/EasyRAG/pull/46)、[#47](https://github.com/vansye/EasyRAG/pull/47) |
 | G 索引、变更、恢复、问答、HTTP | [#45](https://github.com/vansye/EasyRAG/pull/45)、[#50](https://github.com/vansye/EasyRAG/pull/50)、[#51](https://github.com/vansye/EasyRAG/pull/51)、[#52](https://github.com/vansye/EasyRAG/pull/52)、[#53](https://github.com/vansye/EasyRAG/pull/53) |
 | 真实索引恢复与维护全链路 | [#54](https://github.com/vansye/EasyRAG/pull/54)、[#55](https://github.com/vansye/EasyRAG/pull/55) |
+| 统一运行入口、CI、旧实现退出与本机切换 | [#56](https://github.com/vansye/EasyRAG/pull/56) |
 
-切换执行结果和备份证据单独记录在 [切换与回退](fastapi-cutover.md)，发布 PR 不等于本机已经切换。
+2026-09-15 已完成本机切换：新就绪审计拦截旧索引缺失，离线重建后 623 个切片 ID 全部保留，13 份原资料与真实浏览器流程验收通过。完整执行结果、配置归属和备份证据见 [切换与回退](fastapi-cutover.md)。所有 PR 保持待审查，未自动合并；URL 收录、检索改写和评估界面仍属后续规划。

@@ -2,7 +2,7 @@
 
 供维护者将 Java 8080 + Python 8000 切换为一个 FastAPI 8080 进程。目标是保留同一套资料、切片、向量和回答模型配置，并留下可操作的回退入口。首次新建空库请按 [README](../README.md) 启动；公共接口见 [API 文档](api.md)。
 
-本手册是执行流程，**不代表本机已完成备份或切换**。实际结果记录在文末；任何命令失败、检查不符或资料无法核验，都保持暂停写入并停止后续步骤。
+本机已于 2026-09-15 完成切换与验收，实际结果见文末。以下保留完整执行和回退流程；再次执行时使用当次核验的进程、路径和备份。任何命令失败、检查不符或资料无法核验，都保持暂停写入并停止后续步骤。
 
 ## 1. 记录配置，冻结写入并停旧服务
 
@@ -181,9 +181,16 @@ $env:SPRING_DATASOURCE_PASSWORD = $rollbackCredential.GetNetworkCredential().Pas
 | 项目 | 当前记录 |
 |---|---|
 | 旧代码入口 | `01103d8` / `feat/knowledge-workspace`，原工作区保留 |
-| 旧 Java/Python 实际 PID 已退出 | 待执行并记录 |
-| 成套备份位置、哈希与恢复验证 | 待执行并记录；本文路径不是备份凭证 |
-| `adopt-legacy-db` 结果与数据核对 | 待执行并记录 |
-| 统一 8080、手动就绪与索引恢复 | 待执行并记录 |
-| 原资料/引用核验与临时资料闭环 | 待执行并记录 |
-| 是否开放写入 / 是否回退 | 待验证后决定 |
+| 旧 Java/Python 实际 PID 已退出 | 2026-09-15 05:30（UTC+8）：Java 34068、Python 22712 及对应启动器均退出，8080/8000 释放；停止前 READY、13 份有效资料均 INDEXED |
+| 成套备份位置、哈希与恢复验证 | `S:\EasyRAG-backups\20260915-052954`：16 行 document（含历史/软删除）、623 行 chunk、Flyway 历史、完整 Chroma、旧 `.env`、Java 本机配置、tokenizer；原模型覆盖文件不存在。SQL 恢复到随机隔离空库后逐行哈希一致，验证库已清理；文件 SHA-256 见本地 `manifest.json` |
+| `adopt-legacy-db` 结果与数据核对 | 退出码 0、status OK，登记 `0001_legacy_v2`；接管前后所有原文档、切片和 Flyway 行的完整哈希一致 |
+| 首次就绪检查 | 发现旧 Chroma 仅有 106 条向量，较 623 个有效切片缺少 517 条；返回 503 并保持 RECOVERY_REQUIRED，没有在不一致时开放问答 |
+| 离线索引恢复 | `rebuild-index` 退出码 0：13 份资料、623 个切片，623 个 ID 全部复用。与备份恢复库逐字段比较，只有有效资料的 `indexed_at` 更新，正文、元数据、updated_at、切片及 Flyway 历史未变；证据见本地 `post-rebuild-data.json` |
+| 统一 8080、手动就绪 | FastAPI 实际 worker PID 43556（启动器 35544），代码提交 `b1deacc`；只监听 127.0.0.1:8080，8000 无监听。MySQL、Chroma、embedding、tokenizer 均 UP；手动 ready 为 READY / recovered 0，Chroma 623 条向量，Vue 5173 代理通过 |
+| 原资料/引用核验与临时资料闭环 | `browser-live.mjs` 的 10 个步骤通过：配置保存/重读/恢复，上传、索引、引用原文、编辑、重处理、删除、删除后拒答。3 次真实问答均 HTTP 200（ANSWERED、ANSWERED、REFUSED），无页面异常；临时资料 17 已软删除，切片/向量清除，原资料与切片完整哈希未再改变 |
+| 模型与配置 | `agnes-3.0-flash` / openai，来源 environment；检索 `bge-m3` / 1024 维。网页验证后已恢复原配置，新旧工作区均无 `config/llm.json` 覆盖文件；新后端 `.env` 仍被 Git 忽略 |
+| 是否开放写入 / 是否回退 | 2026-09-15 05:51（UTC+8）最终核验 READY，开放使用；未回退。备份哈希再次验证通过，旧工作区和全部 PR 保留，未执行合并 |
+
+验证与交付：本次 [PR #56](https://github.com/vansye/EasyRAG/pull/56) 的 [Linux CI](https://github.com/vansye/EasyRAG/actions/runs/34898370390) 通过默认 Python 471 项、真实 MySQL 61 项、Vue 15 项及生产构建。浏览器验收连接真实本地 embedding 与当前回答模型；3 次提问耗时分别为 7.978、2.032、1.558 秒，仅记录该次场景，不作为性能基准。
+
+本地证据：备份目录中的 `manifest.json`、`post-rebuild-data.json`、`final-check.json`；新工作区 `rag-service/data/cutover/` 的进程、配置、就绪与审计记录；`frontend/.verification/live-report.json` 与截图。备份、密钥、用户资料和这些运行产物均未提交到 Git。
