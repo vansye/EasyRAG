@@ -32,6 +32,7 @@ class DatabaseSettings(BaseSettings):
 
 class Database:
     def __init__(self, settings: DatabaseSettings):
+        self._schema_verified = False
         self._engine = create_engine(
             URL.create('mysql+pymysql', username=settings.mysql_user,
                        password=settings.mysql_password.get_secret_value(), host=settings.mysql_host,
@@ -55,6 +56,13 @@ class Database:
         config.set_main_option('script_location', str(Path(__file__).parent / 'migrations'))
         config.attributes['connection'] = connection
         return config
+
+    def require_schema(self, connection):
+        if not self._schema_verified:
+            if self._revision(connection) != REVISION:
+                raise SchemaMismatch('database has not been initialized or adopted')
+            verify_schema(connection)
+            self._schema_verified = True
 
     @staticmethod
     def _revision(connection):
@@ -96,6 +104,7 @@ class Database:
                     raise SchemaMismatch('database has not been initialized or adopted')
                 verify_schema(connection)
         except DatabaseUnavailable as failure:
+            self._schema_verified = False
             return {'status': 'DOWN', 'error': type(failure).__name__}
         return {'status': 'UP'}
 
