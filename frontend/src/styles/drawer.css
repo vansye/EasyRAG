@@ -1,0 +1,68 @@
+body.dialog-open { overflow: hidden; }
+.document-dialog { position: fixed; inset: 18px 18px 18px auto; margin: 0; padding: 0; width: min(690px, calc(100vw - 36px)); height: calc(100dvh - 36px); max-height: none; max-width: none; color: var(--ink); background: #fff; border: 1px solid #e3e9dc; border-radius: 13px; box-shadow: -8px 0 70px #1b33142b; }
+.document-dialog::backdrop { background: #2031203d; backdrop-filter: blur(2px); }
+.document-dialog[open] { display: block; animation: drawer-arrive .22s ease-out; }
+.drawer-shell { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+.drawer-header { display: flex; justify-content: space-between; align-items: center; min-height: 61px; flex-shrink: 0; padding: 0 27px; border-bottom: 1px solid #e9eee2; }
+.drawer-header .eyebrow { font-size: 12px; letter-spacing: .7px; }
+.drawer-title-area { padding: 24px 28px 22px; }
+.drawer-title-area h2 { font-family: var(--heading-font); font-size: 26px; font-weight: 500; color: #556a42; line-height: 1.6; overflow-wrap: anywhere; }
+.drawer-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 13px; margin-top: 15px; color: var(--muted); font-size: 12px; }
+.drawer-meta .status-badge { font-size: 12px; }
+.drawer-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.drawer-tags > span { border-radius: 4px; background: #f0f5e7; color: var(--muted); padding: 3px 7px; font-size: 12px; }
+.drawer-tabs { display: flex; align-items: center; flex-shrink: 0; min-height: 47px; border-top: 1px solid #eaf0e0; border-bottom: 1px solid #eaf0e0; margin: 0 27px; gap: 24px; }
+.drawer-tabs > button[role='tab'] { display: flex; align-items: center; gap: 6px; align-self: stretch; position: relative; padding: 0 1px; border: 0; color: var(--muted); background: transparent; font-size: 12px; }
+.drawer-tabs > button[role='tab'].active { color: #69834f; }
+.drawer-tabs > button[role='tab'].active::after { content: ''; position: absolute; bottom: -1px; height: 2px; background: #8da775; left: 0; right: 0; border-radius: 1px; }
+.drawer-tabs > button[role='tab'] > span { border-radius: 4px; padding: 1px 5px; background: #f2f6ed; color: var(--muted); font-size: 12px; }
+.drawer-tabs .drawer-edit { margin-left: auto; font-size: 12px; color: var(--muted); gap: 5px; }
+.editing-indicator { margin-left: auto; color: #b49862; font-size: 12px; }
+.drawer-scroll-area { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 23px 28px 30px; scrollbar-width: thin; scrollbar-color: #dce6d1 transparent; }
+.original-content { margin: 0; font-family: var(--body-font); white-space: pre-wrap; overflow-wrap: anywhere; color: #475e3c; font-size: 14px; line-height: 2; }
+.document-editor { display: block; width: 100%; min-height: 350px; height: 46vh; resize: vertical; border-radius: 7px; border: 1px solid #cddfbd; padding: 15px; background: #fdfefb; color: #475e3c; font-family: var(--body-font); font-size: 13px; line-height: 1.9; outline-offset: 2px; }
+.editor-hint { color: var(--muted); font-size: 12px; margin-top: 12px; line-height: 1.8; }
+.chunk-list { display: flex; flex-direction: column; gap: 15px; }
+.chunk-card { padding: 17px 19px; border: 1px solid #e1ead7; border-radius: 8px; background: #fcfef9; scroll-margin: 18px; }
+.chunk-card.is-highlighted { border-color: #b1c997; background: #f4f9ed; box-shadow: 0 0 0 3px #e9f1dd70; }
+.chunk-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+.chunk-selected-label { display: flex; align-items: center; gap: 5px; color: var(--muted); }
+.chunk-card h3 { font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 10px; }
+.chunk-card p { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.95; color: #526948; }
+.drawer-footer { display: flex; justify-content: space-between; align-items: center; gap: 16px; border-top: 1px solid #e5eddb; padding: 17px 27px; flex-shrink: 0; background: #fcfdf9; }
+.drawer-footer > div { display: flex; gap: 9px; }
+.delete-button { color: #a05245; font-size: 12px; }
+.delete-button:hover:not(:disabled) { color: var(--danger); }
+.editor-footer-note { color: var(--muted); font-size: 12px; }
+.drawer-notice { margin: 0 27px 15px; padding: 10px 12px; font-size: 12px; flex-shrink: 0; }
+.drawer-notice .text-button { font-size: 12px; }
+.drawer-notice .notice-message { overflow-wrap: anywhere; }
+.drawer-loading { padding: 32px 28px; display: flex; flex-direction: column; gap: 20px; }
+.skeleton-heading { width: 62%; height: 27px; margin-bottom: 20px; }
+.skeleton-paragraph { width: 96%; height: 11px; }
+.skeleton-paragraph:nth-child(3n) { width: 81%; }
+.drawer-empty { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 13px; padding: 48px 20px; text-align: center; color: var(--muted); }
+.drawer-empty p { font-size: 12px; line-height: 1.9; }
+.drawer-empty > span { font-size: 12px; color: var(--muted); }
+.drawer-empty .button { margin-top: 8px; }
+.drawer-failure { flex: 1; }
+.drawer-failure h2 { font-size: 19px; font-family: var(--heading-font); font-weight: 500; }
+.delete-confirmation { padding: 17px 26px; border-top: 1px solid #f0e0d3; background: #fcf7f2; display: flex; flex-shrink: 0; justify-content: space-between; align-items: center; gap: 18px; }
+.delete-confirmation strong { font-size: 12px; color: #956048; font-weight: 500; }
+.delete-confirmation p { color: #8d6b55; font-size: 12px; margin-top: 6px; line-height: 1.7; }
+.delete-confirmation > div:last-child { display: flex; gap: 8px; }
+@keyframes drawer-arrive { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: translateX(0); } }
+@media (max-width: 650px) {
+  .document-dialog { inset: 8px; width: calc(100vw - 16px); height: calc(100dvh - 16px); border-radius: 10px; }
+  .drawer-header { padding: 0 18px; min-height: 54px; }
+  .drawer-title-area { padding: 21px 19px 19px; }
+  .drawer-title-area h2 { font-size: 22px; }
+  .drawer-meta { gap: 10px; font-size: 12px; }
+  .drawer-tabs { margin: 0 18px; gap: 18px; }
+  .drawer-scroll-area { padding: 21px 19px; }
+  .original-content { font-size: 14px; }
+  .drawer-footer { padding: 14px 18px; }
+  .drawer-notice { margin-right: 18px; margin-left: 18px; font-size: 12px; }
+  .delete-confirmation { padding: 15px 18px; flex-wrap: wrap; gap: 13px; }
+  .delete-confirmation > div:last-child { margin-left: auto; }
+}

@@ -24,14 +24,15 @@ public class AsyncIndexingConfig {
         executor.setCorePoolSize(1);
         executor.setMaxPoolSize(1);
         executor.setThreadNamePrefix("indexing-");
-        // 不拒绝、不丢弃：收录方已把 PENDING 落库，任务丢失意味着文档
-        // 永远停在 PENDING 且无人知晓（要等手动恢复才发现）
-        executor.setRejectedExecutionHandler(new java.util.concurrent.ThreadPoolExecutor.DiscardPolicy() {
+        // 关闭时必须通知调用方：静默丢弃会让已经交接的变更租约永远占用。
+        // 服务收到提交失败后保留 PENDING，并将闸门转入 RECOVERY_REQUIRED。
+        executor.setRejectedExecutionHandler(new java.util.concurrent.ThreadPoolExecutor.AbortPolicy() {
             @Override
             public void rejectedExecution(Runnable task, java.util.concurrent.ThreadPoolExecutor pool) {
                 // 队列无界时理论上到不了这里；到了说明关闭中，记日志留痕
                 org.slf4j.LoggerFactory.getLogger("indexing-executor")
                         .warn("indexing task rejected during executor shutdown");
+                super.rejectedExecution(task, pool);
             }
         });
         executor.initialize();

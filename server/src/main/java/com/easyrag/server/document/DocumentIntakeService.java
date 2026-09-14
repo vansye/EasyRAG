@@ -70,7 +70,7 @@ public class DocumentIntakeService {
         FrontMatter frontMatter = FrontMatter.parse(content);
         String title = resolveTitle(frontMatter.title(), frontMatter.body(),
                 dot < 0 ? name : name.substring(0, dot));
-        String contentHash = sha256Hex(normalize(content));
+        String contentHash = contentHash(content);
         long id = documents.insertPending(new DocumentQueryRepository.NewDocument(
                 "UPLOAD", limited(name, MAX_SOURCE_URI_CODE_POINTS), title, content, contentHash,
                 frontMatter.tags()));
@@ -84,7 +84,7 @@ public class DocumentIntakeService {
      * 形如 "# 标题" 的行出现在围栏代码块内时会被误认，属已知近似——常规笔记
      * 中首个 H1 出现在代码块之前的概率极低，为它移植整套围栏解析不值得。
      */
-    private static String resolveTitle(String frontMatterTitle, String body, String fallback) {
+    static String resolveTitle(String frontMatterTitle, String body, String fallback) {
         if (frontMatterTitle != null && !frontMatterTitle.isBlank()) {
             return limited(frontMatterTitle.strip(), MAX_TITLE_CODE_POINTS);
         }
@@ -184,6 +184,10 @@ public class DocumentIntakeService {
     /** 变更检测的哈希口径（子 Issue A §一.2）：统一换行符 + 去首尾空白。 */
     private static String normalize(String content) {
         return content.replace("\r\n", "\n").replace("\r", "\n").strip();
+    }
+
+    static String contentHash(String content) {
+        return sha256Hex(normalize(content));
     }
 
     private static String sha256Hex(String normalized) {

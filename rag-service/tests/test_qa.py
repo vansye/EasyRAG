@@ -5,11 +5,14 @@ from __future__ import annotations
 import os
 
 import httpx
+import httpx2
 import pytest
+from fastapi.testclient import TestClient
 
-from app import config
+from app import config, main, qa
 from app.config import LlmSettings, Settings
 from app.index_store import IndexStore
+from app.llm import create_chat_model
 from app.qa import QaError, QaPipeline, QaResponse
 from app.retrieval import RetrievedChunk
 
@@ -20,6 +23,8 @@ def settings(tmp_path, monkeypatch):
         if variable.startswith(("EMBEDDING_", "CHUNK_", "EMBED_", "LLM_")):
             monkeypatch.delenv(variable, raising=False)
     monkeypatch.setattr(config, "DATA_DIR", tmp_path)
+    monkeypatch.setenv("LANGSMITH_TRACING", "false")
+    monkeypatch.setenv("LANGCHAIN_TRACING_V2", "false")
     return Settings(_env_file=None, embedding_model="test-embedding", embedding_dim=3)
 
 
@@ -176,3 +181,67 @@ class TestAnswerQuestion:
         pipeline = QaPipeline(settings=settings, index=IndexStore(settings), model=_TimingOut())
         with pytest.raises(QaError, match="RuntimeError"):
             pipeline.answer_question("问题")
+
+@pytest.mark.parametrize("provider", ["openai", "deepseek"])
+@pytest.mark.parametrize("failing_stage", ["judge", "generate"])
+@pytest.mark.parametrize("failure_kind", ["timeout", "api_error"])
+def test_sdk_failure_keeps_existing_llm_unavailable_response(
+    settings, monkeypatch, provider, failing_stage, failure_kind,
+):
+    requests = []
+    private_details = "private-question Authorization: Bearer private-api-key"
+    original_send = httpx2.Client.send
+
+    def send(_client, request, **_options):
+        if request.url.host == "testserver":
+            return original_send(_client, request, **_options)
+        assert request.url.host == "private-model.example.test"
+        requests.append(request)
+        if failing_stage == "generate" and len(requests) == 1:
+            return httpx2.Response(200, request=request, json={
+                "id": "judge-result",
+                "object": "chat.completion",
+                "created": 0,
+                "model": "test-model",
+                "choices": [{
+                    "index": 0,
+                    "message": {"role": "assistant", "content": '{"verdict": "SUFFICIENT"}'},
+                    "finish_reason": "stop",
+                }],
+            })
+        if failure_kind == "timeout":
+            raise httpx2.ReadTimeout(private_details, request=request)
+        return httpx2.Response(503, request=request, json={
+            "error": {"message": private_details, "type": "server_error"},
+        })
+
+    monkeypatch.setattr(httpx2.Client, "send", send)
+    monkeypatch.setattr(qa, "retrieve", lambda *args, **kwargs: CHUNKS)
+    model = create_chat_model(LlmSettings(
+        _env_file=None,
+        provider=provider,
+        model="test-model",
+        base_url="https://private-model.example.test/v1",
+        api_key="private-api-key",
+    ))
+    pipeline = _pipeline(settings, model)
+    monkeypatch.setattr(main.app.state, "settings", settings, raising=False)
+    monkeypatch.setattr(main.app.state, "index", pipeline.index, raising=False)
+    monkeypatch.setattr(main, "QaPipeline", lambda **kwargs: pipeline)
+    client = TestClient(main.app, raise_server_exceptions=False)
+    try:
+        response = client.post("/query", json={"question": "private-question"})
+    finally:
+        client.close()
+
+    assert response.status_code == 503
+    detail = response.json()["detail"]
+    assert detail["error"] == "LLM_UNAVAILABLE"
+    assert detail["cause"] == "QA_PIPELINE"
+    assert set(detail) == {"error", "cause", "detail"}
+    expected_error = "Timeout" if failure_kind == "timeout" else "Error"
+    assert expected_error in detail["detail"]
+    assert all(value not in response.text for value in (
+        "private-question", "private-api-key", "private-model.example.test", "Authorization",
+    ))
+    assert len(requests) == (1 if failing_stage == "judge" else 2)

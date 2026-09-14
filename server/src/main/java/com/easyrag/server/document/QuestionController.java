@@ -4,6 +4,7 @@ import com.easyrag.server.rag.RagOperationGate;
 import com.easyrag.server.rag.RagOperationGate.Operation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.NestedExceptionUtils;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,6 +17,7 @@ import tools.jackson.databind.JsonNode;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * POST /api/questions —— 问答入口（U4 / U5，模块 C 的对外端点）。
@@ -56,11 +58,19 @@ public class QuestionController {
             // RECOVERY_REQUIRED / MUTATING / RECOVERING：明确反馈不就绪
             throw new Unavailable(admission.state().name());
         }
+        long startedAt = System.nanoTime();
         try (RagOperationGate.Lease lease = admission.lease().orElseThrow()) {
             RagQueryClient.QueryResponse answer = ragQueryClient.ask(question);
             List<DocumentQueryRepository.ChunkSource> sources =
                     documents.findSources(answer.chunkIds() == null ? List.of() : answer.chunkIds());
             return new AnsweredQuestion(answer.answer(), answer.status(), sources, answer.trace());
+        } catch (RestClientException | IllegalArgumentException failure) {
+            LOGGER.warn("question_upstream_failure exception_type={} cause_type={} duration_ms={} upstream_status={}",
+                    failure.getClass().getSimpleName(),
+                    NestedExceptionUtils.getMostSpecificCause(failure).getClass().getSimpleName(),
+                    TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt),
+                    failure instanceof RestClientResponseException response ? response.getStatusCode().value() : "none");
+            throw failure;
         }
     }
 
@@ -90,7 +100,6 @@ public class QuestionController {
      */
     @ExceptionHandler({RestClientException.class, IllegalArgumentException.class})
     public ResponseEntity<Map<String, String>> upstream(RuntimeException failure) {
-        LOGGER.warn("question upstream failed: {}", failure.toString(), failure);
         return ResponseEntity.status(502).body(Map.of("error", "问答服务暂时不可用"));
     }
 

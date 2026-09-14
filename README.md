@@ -2,7 +2,7 @@
 
 个人知识库问答系统。收录笔记、文档与链接；基于知识库内容问答，答案附带可点开的出处；资料更新或删除后，问答结果随之更新。知识库中没有的内容，系统明确拒答，不编造。
 
-> 回声实验室招新项目 · 题目一（个人知识库管理）。当前处于文档设计与 Issue 驱动阶段，按里程碑逐 PR 落地。
+> 回声实验室招新项目 · 题目一（个人知识库管理）。当前已提供连接实际后端的「资料库 / 知识问答」本地工作台，按里程碑继续迭代。
 
 ## 技术栈
 
@@ -36,20 +36,21 @@ Vue ──REST──► Spring Boot ──问题──► Python RAG 引擎
                   ▼
             Spring Boot 用 chunk_id 查 MySQL，补全出处定位（文档、标题、位置）
                   ▼
-Vue 展示：答案 + 出处 + 检索过程（重查次数、采用/丢弃的片段）
+Vue 展示：答案 + 出处 + 检索过程（轮次、检索片段、正文实际引用）
 ```
 
 ## 目录结构
 
 ```
 EasyRAG/
+├── frontend/      # Vue 3 资料库与知识问答工作台
 ├── server/        # Spring Boot 知识管理服务（M1 已落地）
 ├── rag-service/   # Python RAG 引擎（M1 已落地）
 ├── docs/          # 设计文档、Issue 底稿、黄金问答集
 └── sample-knowledge/  # 样例语料（29 篇），供评估使用
 ```
 
-前端（`frontend/`，Vue 3）尚未开始，见下方进度。
+前端启动、交互范围与验证方式见 [frontend/README.md](frontend/README.md)。
 
 ## 依赖
 
@@ -110,14 +111,30 @@ curl http://localhost:8000/health
 
 `embedding.status` 为 `DOWN` 且 `error` 为 `MODEL_NOT_FOUND` 表示配置的模型没拉下来，响应里会列出实际可用的模型。换模型需同时改 `EMBEDDING_MODEL` 与 `EMBEDDING_DIM`——两者不一致时服务拒绝启动并提示重建（维度错配若不拦住，报错会推迟到检索时才爆，且表现为距离计算异常）。
 
-**LLM 配置**（`.env`，模板里是占位符，必须自己填）：`LLM_MODEL` 与 `LLM_API_KEY` 必填，`LLM_BASE_URL` 可省略以使用适配器默认地址——不填则提问返回 503 `LLM_NOT_CONFIGURED`（"没配"与"挂了"是两种不同的故障）。三种常见写法（DeepSeek / OpenAI / 本地 Ollama）抄 `.env.example` 内注释即可；本地 Ollama 走 OpenAI 兼容端点 `http://localhost:11434/v1`，占位 key 填 `ollama`。超时默认 180 秒，按最慢部署形态（本地 7b 单问实测 72-83 秒）定。
+**LLM 配置**：可在网页「知识问答 → 模型 → 配置回答模型」填写，也可使用 `.env` 中的 `LLM_PROVIDER`、`LLM_MODEL`、`LLM_BASE_URL`、`LLM_API_KEY`。模板里的占位符需替换为自己的配置；模型名称与密钥缺失时，问答返回 503 `LLM_NOT_CONFIGURED`。DeepSeek / OpenAI / 本地 Ollama 示例见 `.env.example`；Ollama 使用 OpenAI 兼容端点 `http://localhost:11434/v1`，占位 key 填 `ollama`。模板将单次模型超时设为 180 秒，按本地 7b 的较慢响应预留。
 
-### 3. 测试
+网页配置优先于启动配置，保存到已被 Git 忽略的 `rag-service/config/llm.json`（可用 `LLM_CONFIG_FILE` 指定路径），下一次提问生效；服务重启后保留。API Key 不回传，留空仅在服务类型和接口地址不变时沿用。「恢复启动配置」移除这个文件，不改 `.env`。嵌入模型仍通过后端配置，网页展示其实际名称与维度。
+
+### 3. 前端工作台（端口 5173）
+
+在 Python 与 Java 服务启动后，另开一个终端：
+
+```bash
+cd frontend
+npm ci
+npm run dev -- --host 127.0.0.1 --port 5173
+```
+
+打开 http://127.0.0.1:5173/ 。开发代理把 `/api` 和 `/health` 转发到 Java 8080。服务重启后，页面会显示「确认就绪」按钮，需明确点击后再使用问答。模型入口展示实际回答与检索模型，并提供回答模型配置面板。
+
+### 4. 测试
 
 ```bash
 cd server && ./mvnw test        # 单元测试，不需要数据库
 cd server && ./mvnw verify      # 追加集成测试，需要 MySQL 与本地凭据
 cd rag-service && .venv/Scripts/python -m pytest    # 不需要 Ollama 在线
+cd frontend && npm test
+cd frontend && npm run build
 ```
 
 ## 进度
@@ -126,13 +143,13 @@ cd rag-service && .venv/Scripts/python -m pytest    # 不需要 Ollama 在线
 |---|---|
 | M0 样例语料 + 黄金问答集 | 完成（29 篇 / 30 题） |
 | M1 双后端骨架与健康检查 | 完成 |
-| M1 前端骨架 + CI | CI 完成（双后端测试全绿）；前端未开始 |
-| M2 收录 + 索引 + 朴素问答 | **进行中**：收录/列表/异步索引/就绪恢复已落地（#16 #17），朴素问答未开始 |
+| 前端工作台 | 资料管理、知识问答、引用核验、检索过程与回答模型配置（[#33](https://github.com/vansye/EasyRAG/issues/33)） |
+| 收录、索引与问答 | 上传/查询/更新/删除/重建索引、三态问答与手动就绪恢复已实现 |
 
-测试规模：Java 单元 472 + 集成 94（需本地 MySQL）、Python 190。当前测试数见各 PR 的验证段，以最新合并为准。
+测试分为 Java 单元及 MySQL 集成、Python 回归、前端逻辑与浏览器交互。最新数量以命令输出与变更记录为准。
 
 ## 开发方式
 
-- Issue 驱动：总功能文档 Issue（[#1](https://github.com/vansye/EasyRAG/issues/1)）定义产品边界与模块划分，每个模块一个子 Issue（[#2 资料管理](https://github.com/vansye/EasyRAG/issues/2)、[#3 索引管线](https://github.com/vansye/EasyRAG/issues/3)）；底稿见 [docs/总功能文档-Issue.md](docs/总功能文档-Issue.md)。
+- Issue 驱动：总功能文档 Issue（[#1](https://github.com/vansye/EasyRAG/issues/1)）定义产品边界与模块划分，每个模块一个子 Issue（[#2 资料管理](https://github.com/vansye/EasyRAG/issues/2)、[#3 索引管线](https://github.com/vansye/EasyRAG/issues/3)、[#33 前端工作台](https://github.com/vansye/EasyRAG/issues/33)）；底稿见 [docs/总功能文档-Issue.md](docs/总功能文档-Issue.md)。
 - 一个功能一个 PR，关联对应 Issue，描述说明做了什么、为什么。检索类改进的 PR 标题附评估数字变化（如 `混合检索：hit@5 60% → 80%`）。
 - 评估口径与黄金问答集见 [docs/eval/golden-set-v1.md](docs/eval/golden-set-v1.md)。

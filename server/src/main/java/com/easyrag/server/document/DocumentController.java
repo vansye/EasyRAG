@@ -55,6 +55,7 @@ public class DocumentController {
     @GetMapping
     public DocumentQueryRepository.DocumentPage list(
             @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "q", required = false) String query,
             @RequestParam(name = "page", defaultValue = "0") int page,
             @RequestParam(name = "size", defaultValue = "20") int size) {
         String normalized = status == null || status.isBlank()
@@ -68,7 +69,9 @@ public class DocumentController {
         if (size < 1 || size > MAX_PAGE_SIZE) {
             throw new BadRequest("size 须在 1 到 " + MAX_PAGE_SIZE + " 之间");
         }
-        return documents.findPage(normalized, page, size);
+        return query == null || query.isBlank()
+                ? documents.findPage(normalized, page, size)
+                : documents.findPage(normalized, query.strip(), page, size);
     }
 
     @GetMapping("/{id}")
