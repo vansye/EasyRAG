@@ -31,29 +31,33 @@ jobs:
       - name: 类型检查与生产构建
         run: npm run build
 
-  server:
-    name: 知识管理服务（Spring Boot）
+  backend:
+    name: 统一后端（FastAPI）
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: 装 JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: temurin
-          cache: maven
-
-      # 只跑单元测试：*IT 结尾的集成测试需要真实 MySQL 与本地凭据，
-      # 由 Surefire 的 excludedGroups=requires-mysql 排除（见 server/pom.xml）。
-      # 本地带库时用 ./mvnw verify 跑全套。
-      - name: 单元测试
-        working-directory: server
-        run: ./mvnw -B test
-
-  rag-service:
-    name: RAG 引擎（FastAPI）
-    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: rag-service
+    env:
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: '3306'
+      MYSQL_USER: root
+      MYSQL_PASSWORD: easyrag_ci_only_password
+    services:
+      mysql:
+        image: mysql:8.0.44
+        # 容器仅用于 CI；root 让 fixture 创建并清理随机测试库。
+        env:
+          MYSQL_ROOT_PASSWORD: easyrag_ci_only_password
+          MYSQL_ROOT_HOST: '%'
+        ports:
+          - '127.0.0.1:3306:3306'
+        options: >-
+          --health-cmd="mysql --host=127.0.0.1 --user=root --password=easyrag_ci_only_password --execute='SELECT 1'"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-start-period=30s
+          --health-retries=12
     steps:
       - uses: actions/checkout@v4
 
@@ -62,13 +66,23 @@ jobs:
         with:
           python-version: '3.14'
           cache: pip
+          cache-dependency-path: rag-service/requirements.txt
 
       - name: 装依赖
-        working-directory: rag-service
         run: python -m pip install -r requirements.txt
 
-      # 测试不依赖 Ollama 在线：embedding 探针被打桩，
-      # Chroma 用 tmp_path 隔离，环境变量在 fixture 里清空。
-      - name: 测试
-        working-directory: rag-service
+      - name: 单元测试
+        timeout-minutes: 10
         run: python -m pytest -q
+
+      # 模型与 embedding 使用本地 fixture；数据库连接真实 MySQL。
+      - name: MySQL 集成测试
+        timeout-minutes: 10
+        run: >-
+          python -m pytest
+          tests/mysql_schema_integration.py
+          tests/mysql_knowledge_integration.py
+          tests/mysql_recovery_integration.py
+          tests/mysql_rebuild_integration.py
+          tests/mysql_http_integration.py
+          -q

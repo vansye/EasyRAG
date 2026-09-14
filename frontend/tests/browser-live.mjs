@@ -97,7 +97,7 @@ try {
   const originalIds = originalList.items.map((document) => document.id).sort((a, b) => a - b)
   const before = await originalSnapshot(originalIds)
   report.originalDocuments = originalList.total
-  done('connected to actual Java, Python and model; explicit readiness action')
+  done('connected to the unified FastAPI backend and actual model; explicit readiness action')
   await page.locator('.document-table').waitFor()
   const closeNotice = page.getByRole('button', { name: '关闭提示', exact: true })
   if (await closeNotice.count()) await closeNotice.click()

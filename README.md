@@ -1,155 +1,140 @@
 # EasyRAG
 
-个人知识库问答系统。收录笔记、文档与链接；基于知识库内容问答，答案附带可点开的出处；资料更新或删除后，问答结果随之更新。知识库中没有的内容，系统明确拒答，不编造。
-
-> 回声实验室招新项目 · 题目一（个人知识库管理）。当前已提供连接实际后端的「资料库 / 知识问答」本地工作台，按里程碑继续迭代。
-
-## 技术栈
-
-| 层 | 选型 | 职责 |
-|---|---|---|
-| 前端 | Vue 3 + TypeScript + Vite | 问答界面、资料管理、检索过程展示 |
-| 知识管理服务 | Spring Boot 4.1.0 + MySQL 8 | 对外全部 REST API、资料管理、评估数据存储（唯一真相源） |
-| RAG 引擎 | Python + FastAPI | 切片、embedding、检索、agent 循环、生成 |
-| 模型 | 可配置 | LLM 与 embedding 按配置切换厂商（provider + model + dim 三元组） |
+个人知识库问答系统：收录 Markdown / TXT，管理和编辑资料，基于知识库回答并展示出处与检索过程。资料更新、重索引或删除后，问答使用当前内容；依据不足时明确拒答。Vue 工作台支持在网页配置 OpenAI 兼容接口、DeepSeek 或本地 Ollama 回答模型。
 
 ## 架构
 
-Spring Boot 与 Python 按职责划分：Spring Boot 拥有数据与入口，全部业务数据落 MySQL；Python 只做 RAG 计算，不持有业务数据，其向量与词法索引为派生副本，可随时从 MySQL 全量重建。
+后端统一为一个 FastAPI 进程（8080），前端保持 Vue 3 + TypeScript + Pinia + Vite（5173）。MySQL 8 保存资料与切片，Chroma 保存可重建的派生向量。无需 Java 或独立的内部 RAG HTTP 服务。
 
-```
-写入流（收录 / 更新 / 删除资料）：
-
-收录入口 ──REST──► Spring Boot ──原文+内容哈希──► MySQL document
-                        │
-                        └──原文──► Python 切片 ──chunks──► Spring Boot 落库（chunk 文本+元数据）
-                                          Spring Boot ──chunks──► Python 建索引（派生）
-                                                                    ├─ Chroma 向量索引
-                                                                    └─ BM25 词法索引
-变更：内容哈希比对 → 旧 chunk 失效 → 重索引 → 问答结果同步更新
-
-问答流（提问）：
-
-Vue ──REST──► Spring Boot ──问题──► Python RAG 引擎
-                                        agent 循环：检索 → 不足则改写重查 → 仍不足则拒答
-                  ┌──答案 + chunk_id[] + 检索 trace────────────────────┘
-                  ▼
-            Spring Boot 用 chunk_id 查 MySQL，补全出处定位（文档、标题、位置）
-                  ▼
-Vue 展示：答案 + 出处 + 检索过程（轮次、检索片段、正文实际引用）
+```mermaid
+flowchart LR
+  E[Vue 工作台] --> G[FastAPI / 应用编排 G]
+  G --> A[资料管理 A]
+  G --> B[检索索引 B]
+  G --> C[问答 C]
+  G --> F[回答模型 F]
+  A --> SQL[(MySQL)]
+  B --> V[(Chroma)]
+  B --> EMB[Embedding API]
+  F --> CFG[本机配置]
+  F --> LLM[模型 API]
+  D[离线评估 D] --> B
 ```
 
-## 目录结构
+A/B/C/F 互不引用。G 只调用各模块的 `public.py`，通过注入接口组合问答和索引流程。各模块独立维护类型、异常、数据与测试；模块边界由 AST 测试检查。
 
+- 收录：A 保存 PENDING → 单线程任务调用 B 切片 → A 保存切片及 ID → B 建索引 → A 确认 INDEXED。
+- 问答：查询许可 → F 固定一个模型会话 → C 通过注入端口检索、判定、生成 → A 补全出处，按最终检索 rank 展示。
+- 更新/删除：变更许可覆盖撤旧向量和数据库变更，直到异步索引终态；无法确认一致时关闭问答，要求显式恢复。
+
+完整边界、设计取舍与迁移记录见 [模块设计](docs/fastapi-modules.md)、[架构设计](docs/架构设计.md)。基线仍为向量检索和一次检索后的三态判定；BM25、查询改写重查、URL 抓取属于后续范围。
+
+## 目录
+
+```text
+frontend/                       Vue 资料库 / 知识问答工作台
+rag-service/app/http.py          HTTP 参数、响应与错误适配
+rag-service/app/application/     装配、业务编排、运行门禁、单执行器、恢复
+rag-service/app/modules/
+  knowledge/                    MySQL、迁移、正文/哈希、切片与资料状态
+  retrieval/                    切片、tokenizer、embedding、Chroma
+  qa/                           判定、生成、拒答、trace，注入检索和模型端口
+  answer_models/                配置、凭据、厂商 SDK、单问题会话
+rag-service/app/maintenance.py   独占维护 CLI
+rag-service/scripts/            离线检索评估
+rag-service/tests/              模块、应用、HTTP、隔离 MySQL 集成测试
+docs/                           设计、Issue 底稿、黄金集与评估报告
+sample-knowledge/               29 篇样例语料
 ```
-EasyRAG/
-├── frontend/      # Vue 3 资料库与知识问答工作台
-├── server/        # Spring Boot 知识管理服务（M1 已落地）
-├── rag-service/   # Python RAG 引擎（M1 已落地）
-├── docs/          # 设计文档、Issue 底稿、黄金问答集
-└── sample-knowledge/  # 样例语料（29 篇），供评估使用
-```
-
-前端启动、交互范围与验证方式见 [frontend/README.md](frontend/README.md)。
-
-## 依赖
-
-| 组件 | 版本 | 说明 |
-|---|---|---|
-| JDK | 17 | 本机实测 17；Spring Boot 4.1 要求 17+ |
-| Maven | 不需要 | 用仓库自带的 `./mvnw` |
-| Python | 3.14 | 实测 3.14.6；Chroma 1.5.9 有 cp314 wheel |
-| MySQL | 8.0 | 库会自动创建（`createDatabaseIfNotExist`），表由 Flyway 迁移建 |
-| Ollama | 任意 | 仅在用本地 embedding 时需要 |
 
 ## 本地启动
 
-### 1. 知识管理服务（端口 8080）
+需要 Python 3.14、MySQL 8.0、Node.js 24；默认 embedding 使用本地 Ollama 的 `bge-m3`。也可配置兼容的远程 embedding API。
 
-数据库凭据从环境变量读，不写进代码：
+先通过 MySQL 客户端创建数据库：
 
-```bash
-cd server
-export MYSQL_USER=<用户名>          # Windows PowerShell: $env:MYSQL_USER="<用户名>"
-export MYSQL_PASSWORD=<密码>
-./mvnw spring-boot:run
+```sql
+CREATE DATABASE easyrag CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-启动时 Flyway 自动建 `document` 与 `chunk` 表。验证：
+在 PowerShell 中准备后端：
 
-```bash
-curl http://localhost:8080/health
-# {"status":"UP","service":"easyrag-server","db":{"database":"mysql","status":"UP"}}
-```
-
-`db.status` 为 `DOWN` 表示连不上库（凭据或服务问题）——此时进程仍会正常起，健康检查如实报告。
-
-### 2. RAG 引擎（端口 8000）
-
-```bash
+```powershell
 cd rag-service
 python -m venv .venv
-.venv/Scripts/python -m pip install -r requirements.txt   # Linux/macOS: .venv/bin/python
-cp .env.example .env                                      # 然后填入 LLM 配置（见下方"LLM 配置"）
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+Copy-Item .env.example .env
 ```
 
-默认配置用 Ollama 的 `bge-m3`（1024 维）。除拉模型外还需下载 tokenizer（约 16 MB，被 .gitignore 挡在仓库外，不下载则 `/chunk` 返回 503 `TOKENIZER_UNAVAILABLE`）：
+在 `.env` 填入 `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_DATABASE`、`MYSQL_USER`、`MYSQL_PASSWORD`。配置不入库。Linux/macOS 使用 `.venv/bin/python` 和 `cp .env.example .env`；下列 Python 命令对应替换即可。
 
-```bash
+首次空库初始化：
+
+```powershell
+.\.venv\Scripts\python.exe -m app.maintenance init-db
+```
+
+已有 Java/Flyway V2 数据库使用 `adopt-legacy-db`，不要对旧库运行初始化或删除表。该命令校验历史校验和、字段、索引及外键后登记 Alembic 基线，见 [切换与回退](docs/fastapi-cutover.md)。
+
+准备默认检索模型与固定版本的 tokenizer：
+
+```powershell
 ollama pull bge-m3
-mkdir -p data/tokenizers   # Windows PowerShell: New-Item -ItemType Directory -Force data/tokenizers
-curl -L -o data/tokenizers/bge-m3-5617a9f61b028005a4858fdac845db406aefb181.json \
-  https://huggingface.co/BAAI/bge-m3/resolve/5617a9f61b028005a4858fdac845db406aefb181/tokenizer.json
-.venv/Scripts/python -m app
+New-Item -ItemType Directory -Force data/tokenizers | Out-Null
+curl.exe -L -o data/tokenizers/bge-m3-5617a9f61b028005a4858fdac845db406aefb181.json https://huggingface.co/BAAI/bge-m3/resolve/5617a9f61b028005a4858fdac845db406aefb181/tokenizer.json
+.\.venv\Scripts\python.exe -m app
 ```
 
-验证：
+只运行一个后端进程和一个 worker。后端与维护命令共用 `RUNTIME_LOCK_FILE`，同一套数据必须使用同一个锁路径；不要为多实例配置不同锁。启动后先访问 `http://127.0.0.1:8080/health`：进程始终单独报告 UP，数据库、Chroma、embedding 和 tokenizer 分层报告依赖状态。资料浏览与模型配置不依赖模型服务成功。
 
-```bash
-curl http://localhost:8000/health
-```
+在另一终端启动前端：
 
-`embedding.status` 为 `DOWN` 且 `error` 为 `MODEL_NOT_FOUND` 表示配置的模型没拉下来，响应里会列出实际可用的模型。换模型需同时改 `EMBEDDING_MODEL` 与 `EMBEDDING_DIM`——两者不一致时服务拒绝启动并提示重建（维度错配若不拦住，报错会推迟到检索时才爆，且表现为距离计算异常）。
-
-**LLM 配置**：可在网页「知识问答 → 模型 → 配置回答模型」填写，也可使用 `.env` 中的 `LLM_PROVIDER`、`LLM_MODEL`、`LLM_BASE_URL`、`LLM_API_KEY`。模板里的占位符需替换为自己的配置；模型名称与密钥缺失时，问答返回 503 `LLM_NOT_CONFIGURED`。DeepSeek / OpenAI / 本地 Ollama 示例见 `.env.example`；Ollama 使用 OpenAI 兼容端点 `http://localhost:11434/v1`，占位 key 填 `ollama`。模板将单次模型超时设为 180 秒，按本地 7b 的较慢响应预留。
-
-网页配置优先于启动配置，保存到已被 Git 忽略的 `rag-service/config/llm.json`（可用 `LLM_CONFIG_FILE` 指定路径），下一次提问生效；服务重启后保留。API Key 不回传，留空仅在服务类型和接口地址不变时沿用。「恢复启动配置」移除这个文件，不改 `.env`。嵌入模型仍通过后端配置，网页展示其实际名称与维度。
-
-### 3. 前端工作台（端口 5173）
-
-在 Python 与 Java 服务启动后，另开一个终端：
-
-```bash
+```powershell
 cd frontend
 npm ci
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-打开 http://127.0.0.1:5173/ 。开发代理把 `/api` 和 `/health` 转发到 Java 8080。服务重启后，页面会显示「确认就绪」按钮，需明确点击后再使用问答。模型入口展示实际回答与检索模型，并提供回答模型配置面板。
+打开 `http://127.0.0.1:5173/`，点击「确认就绪」。后端启动时是 `RECOVERY_REQUIRED`；只有资料/切片/向量完整一致才开放问答，并重新提交 PENDING。程序不会自动替用户确认恢复。前端继续代理 `/api` 与 `/health` 到 8080，页面和交互说明见 [前端 README](frontend/README.md)。
 
-### 4. 测试
+## 回答模型
 
-```bash
-cd server && ./mvnw test        # 单元测试，不需要数据库
-cd server && ./mvnw verify      # 追加集成测试，需要 MySQL 与本地凭据
-cd rag-service && .venv/Scripts/python -m pytest    # 不需要 Ollama 在线
-cd frontend && npm test
-cd frontend && npm run build
+网页「知识问答 → 模型 → 配置回答模型」可保存服务类型、接口地址、模型名与 API Key。配置保存在忽略入库的 `rag-service/config/llm.json`，或 `LLM_CONFIG_FILE` 指定路径。密钥不回传，留空仅在接口地址和服务类型不变时沿用。
+
+每个问题固定一个会话；配置修改从下一次问题生效，切换回答模型不重建向量。「恢复启动配置」移除本机覆盖文件，重新读取环境变量 / `.env`。启动配置使用 `LLM_PROVIDER`、`LLM_MODEL`、`LLM_BASE_URL`、`LLM_API_KEY`、`LLM_TIMEOUT_SECONDS`，示例见 [.env.example](rag-service/.env.example)。
+
+## 维护与故障恢复
+
+停止后端后，在同一目录、同一配置下执行：
+
+```powershell
+.\.venv\Scripts\python.exe -m app.maintenance adopt-legacy-db
+.\.venv\Scripts\python.exe -m app.maintenance rebuild-index
 ```
 
-## 进度
+接管只用于支持的旧库；重建用于缺失/多余/过时向量、遗留 INDEXING 或切片/embedding 配置改变。重建保留能证明与当前正文和切片参数完全匹配的 ID，否则重新切片。失败返回非零退出码，重新启动也不会自动放行。没有公开 `/reset`、`/embed`、`/chunk` 等内部操作接口。
 
-| 里程碑 | 状态 |
-|---|---|
-| M0 样例语料 + 黄金问答集 | 完成（29 篇 / 30 题） |
-| M1 双后端骨架与健康检查 | 完成 |
-| 前端工作台 | 资料管理、知识问答、引用核验、检索过程与回答模型配置（[#33](https://github.com/vansye/EasyRAG/issues/33)） |
-| 收录、索引与问答 | 上传/查询/更新/删除/重建索引、三态问答与手动就绪恢复已实现 |
+[API 文档](docs/api.md) 说明参数、状态码和响应字段；在线路由与请求结构位于 `http://127.0.0.1:8080/docs`。
 
-测试分为 Java 单元及 MySQL 集成、Python 回归、前端逻辑与浏览器交互。最新数量以命令输出与变更记录为准。
+## 验证
 
-## 开发方式
+```powershell
+cd rag-service
+.\.venv\Scripts\python.exe -m pytest -q
+# 需要可创建/删除测试库的 MySQL 用户；环境变量 MYSQL_* 指向本机测试服务器。
+.\.venv\Scripts\python.exe -m pytest tests/mysql_schema_integration.py tests/mysql_knowledge_integration.py tests/mysql_recovery_integration.py tests/mysql_rebuild_integration.py tests/mysql_http_integration.py -q
+```
 
-- Issue 驱动：总功能文档 Issue（[#1](https://github.com/vansye/EasyRAG/issues/1)）定义产品边界与模块划分，每个模块一个子 Issue（[#2 资料管理](https://github.com/vansye/EasyRAG/issues/2)、[#3 索引管线](https://github.com/vansye/EasyRAG/issues/3)、[#33 前端工作台](https://github.com/vansye/EasyRAG/issues/33)）；底稿见 [docs/总功能文档-Issue.md](docs/总功能文档-Issue.md)。
-- 一个功能一个 PR，关联对应 Issue，描述说明做了什么、为什么。检索类改进的 PR 标题附评估数字变化（如 `混合检索：hit@5 60% → 80%`）。
-- 评估口径与黄金问答集见 [docs/eval/golden-set-v1.md](docs/eval/golden-set-v1.md)。
+集成测试只创建并删除 `easyrag_fastapi_it_<随机UUID>`，不选择业务数据库；使用临时 Chroma、tokenizer 和本地 HTTP 模型服务，不需要真实模型或付费请求。数据库初始化、旧库接管、事务、UTF-8 偏移、索引恢复、HTTP 与维护子进程均有覆盖。CI 在 Linux 上运行同一批测试，并保留 Vue 测试与构建。
+
+```powershell
+cd frontend
+npm test
+npm run build
+npm run test:browser
+npm run test:browser:models
+```
+
+浏览器测试需要前端预览服务和本机 Chrome。`node tests/browser-live.mjs` 会调用当前真实模型，只创建并清理自己命名的临时资料；详见前端 README。
+
+离线评估入口：`python scripts/eval_retrieval.py --help`。黄金集和既有基线见 [评估基线](docs/eval/retrieval-baseline-v1.md)。本次架构迁移未改检索算法，未重新宣称新的检索指标。

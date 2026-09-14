@@ -4,7 +4,7 @@ Vue 3、TypeScript、Pinia、Vite。采用「资料库 / 知识问答」两个�
 
 ## 启动
 
-需要 Node.js 20.19+ 或 22.12+（本机和 CI 使用 Node 24），以及已经启动的 Java 8080、Python 8000。
+需要 Node.js 20.19+ 或 22.12+（本机和 CI 使用 Node 24），以及已经启动的统一 FastAPI 后端 8080。后端准备、数据库初始化和模型依赖见 [项目 README](../README.md)。
 
 ```powershell
 cd frontend
@@ -12,9 +12,11 @@ npm ci
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-打开 http://127.0.0.1:5173/ 。Vite 将 `/api` 和 `/health` 转发到 Java。生产环境需同源反向代理这两个路径，并将前端路由回退到 `index.html`。
+打开 http://127.0.0.1:5173/ 。Vite 将 `/api` 和 `/health` 转发到 FastAPI 8080。生产环境需同源反向代理这两个路径，并将前端路由回退到 `index.html`。
 
-服务重启后，如果顶部提示需要确认，应检查服务后手动点击「确认就绪」。页面不会自动调用恢复接口。
+服务重启后，如果顶部提示需要确认，应检查服务后手动点击「确认就绪」。后端检查资料、切片与向量一致性后才开放问答，并重新提交待处理资料。页面不会自动调用恢复接口；本次后端迁移沿用现有状态更新逻辑，不新增轮询。
+
+`/api/runtime` 的 `rag_available` 表示统一服务可达；问答是否允许由 `state` 判断，依赖详情由 `/health` 报告。检索依赖失败时仍可打开回答模型配置；资料浏览依赖 MySQL。接口字段与错误状态见 [API 文档](../docs/api.md)，旧服务迁移见 [切换与回退](../docs/fastapi-cutover.md)。
 
 ## 当前范围
 
@@ -33,7 +35,7 @@ npm run dev -- --host 127.0.0.1 --port 5173
 
 已配置的密钥不会回填到输入框，留空可沿用，但更换服务类型或接口地址时必须填写新密钥。地址只接受 HTTP(S)，用户信息、查询参数和片段均须移除，凭据只填在 API Key 一栏。本地 Ollama 使用 `http://localhost:11434/v1`，API Key 可填 `ollama`。
 
-浏览器只通过 Java 的 `GET/PUT/DELETE /api/model-config` 读写配置。Python 原子写入本机 `rag-service/config/llm.json`，或 `LLM_CONFIG_FILE` 指定的位置；文件包含明文密钥，已被 Git 忽略。密钥不会回传，也不会进入 localStorage / sessionStorage。「恢复启动配置」移除覆盖文件，重新使用环境变量 / `.env`，不修改原文件。
+浏览器通过统一 FastAPI 的 `GET/PUT/DELETE /api/model-config` 读写配置。F 回答模型模块原子写入本机 `rag-service/config/llm.json`，或 `LLM_CONFIG_FILE` 指定的位置；文件包含明文密钥，已被 Git 忽略。接口成功与失败响应均带 `Cache-Control: no-store`，密钥不会回传，也不会进入 localStorage / sessionStorage。「恢复启动配置」移除覆盖文件，重新使用环境变量 / `.env`，不修改原文件。
 
 接口地址的回读、密钥沿用判断和实际模型调用采用同一解析结果。未设置 `LLM_BASE_URL` 时，OpenAI 兼容 SDK 的地址顺序为 `OPENAI_API_BASE`、启用的 `LANGSMITH_GATEWAY`、`OPENAI_BASE_URL`、官方默认地址；DeepSeek 使用 `DEEPSEEK_API_BASE` 或 `https://api.deepseek.com/v1`。旧环境地址若夹带凭据，配置接口会返回脱敏错误。
 

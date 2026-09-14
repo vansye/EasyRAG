@@ -1,6 +1,6 @@
 # 子 Issue G：FastAPI 接入、应用编排与恢复
 
-父 Issue：#1。当前设计：[FastAPI 模块迁移](fastapi-modules.md)。位置：`app/application`、FastAPI 入口与维护 CLI。
+Issue：[#36](https://github.com/vansye/EasyRAG/issues/36)，父 Issue：#1。当前设计：[FastAPI 模块迁移](fastapi-modules.md)。位置：`app/application`、FastAPI 入口与维护 CLI。
 
 ## 职责
 
@@ -25,7 +25,7 @@ POST /api/questions -> {answer, status, sources, trace}
 GET|PUT|DELETE /api/model-config -> PublicConfig
 GET /api/runtime -> {state, rag_available, llm, embedding}
 POST /api/admin/ready -> ReadinessResult
-GET /health -> {status, service, db, chroma, embedding}
+GET /health -> {status, service, db, retrieval: {status, chroma, embedding, tokenizer}}
 ```
 
 ## 用例与依赖
@@ -41,12 +41,12 @@ GET /health -> {status, service, db, chroma, embedding}
 
 ## PR 与验收
 
-- [ ] 模块骨架与依赖检查：阻止兄弟模块引用、反向依赖和读取私有实现。
-- [ ] 收录索引：后台成功/失败、BUSY 保留 PENDING、短事务外模型调用。
-- [ ] 更新删除：端到端变更许可、哈希未变、索引/数据库失败、提交失败。
-- [ ] 问答引用：三态结果、引用排序、模型切换、错误形状、查询并发许可。
-- [ ] 恢复维护：重启遗留 INDEXING、缺失/多余/旧向量、ready/上传竞态、CLI 中断。
-- [ ] 运行与退出：单进程、单执行者；线程实际结束才释放许可；优雅停机先等待工作再关闭资源。
+- [x] 模块骨架与依赖检查：阻止兄弟模块引用、反向依赖和读取私有实现（PR #39）。
+- [x] 收录索引：后台成功/失败、BUSY 保留 PENDING、短事务外模型调用（PR #45）。
+- [x] 更新删除：端到端变更许可、哈希未变、索引/数据库失败、提交失败（PR #50）。
+- [x] 问答引用：三态结果、引用排序、模型切换、错误形状、查询并发许可（PR #52）。
+- [x] 恢复维护：重启遗留 INDEXING、缺失/多余/旧向量、ready/上传竞态、CLI 中断（PR #51、#54、#55）。
+- [x] 运行与退出：单进程、单执行者；线程实际结束才释放许可；优雅停机先等待工作再关闭资源（PR #53）。
 - [ ] CI + 真实 MySQL 集成 + 浏览器回归；独立备份和切换验证后退出旧 Java。
 
 ## 数据切换
