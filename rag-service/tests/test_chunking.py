@@ -4,7 +4,7 @@ import pytest
 
 
 def test_titles_keep_paths_and_exact_utf8_offsets():
-    from app.chunking import split_markdown
+    from app.modules.retrieval.public import split_markdown
 
     text = "序言🙂\r\n# 主标题\r\n简介。\r\n## 子章节\r\n内容。\r\n### 深层\r\n细节。\r\n## 另一节\r\n结束。"
     chunks = split_markdown(text, count_tokens=len, min_tokens=0)
@@ -30,7 +30,7 @@ def test_titles_keep_paths_and_exact_utf8_offsets():
     ("````python", "```", "`````"),
 ])
 def test_fenced_code_is_not_parsed_as_headings(opening, short_closer, closing):
-    from app.chunking import split_markdown
+    from app.modules.retrieval.public import split_markdown
 
     text = f"# Root\n{opening}\n# code\n\n{short_closer}\n## still code\n{closing}\n## Next\nBody."
     chunks = split_markdown(text, count_tokens=len, min_tokens=0)
@@ -41,7 +41,7 @@ def test_fenced_code_is_not_parsed_as_headings(opening, short_closer, closing):
 
 
 def test_only_three_atx_levels_and_valid_closing_hashes_are_headings():
-    from app.chunking import split_markdown
+    from app.modules.retrieval.public import split_markdown
 
     text = "# Root ###\nIntro.\n## Child###\n#### Not a section\n#not-a-heading\nBody."
     chunks = split_markdown(text, count_tokens=len, min_tokens=0)
@@ -51,7 +51,7 @@ def test_only_three_atx_levels_and_valid_closing_hashes_are_headings():
 
 
 def test_small_adjacent_sections_merge_under_their_common_heading():
-    from app.chunking import split_markdown
+    from app.modules.retrieval.public import split_markdown
 
     text = "# Root\nIntro.\n## A\nA.\n## B\nB.\n"
     chunks = split_markdown(text, count_tokens=len, min_tokens=64)
@@ -63,21 +63,21 @@ def test_small_adjacent_sections_merge_under_their_common_heading():
 
 @pytest.mark.parametrize("text", ["", " \t\r\n"])
 def test_blank_documents_have_no_chunks(text):
-    from app.chunking import split_markdown
+    from app.modules.retrieval.public import split_markdown
 
     assert split_markdown(text, count_tokens=len) == []
 
 
 @pytest.mark.parametrize("maximum,minimum", [(0, 0), (64, 65), (512, -1)])
 def test_invalid_chunk_limits_are_rejected(maximum, minimum):
-    from app.chunking import split_markdown
+    from app.modules.retrieval.public import split_markdown
 
     with pytest.raises(ValueError, match="tokens"):
         split_markdown("text", count_tokens=len, max_tokens=maximum, min_tokens=minimum)
 
 
 def test_long_sections_split_at_paragraphs_before_sentences():
-    from app.chunking import split_markdown
+    from app.modules.retrieval.public import split_markdown
 
     paragraphs = ["# Topic\n" + "甲" * 20 + "\n\n", "乙" * 20 + "\n\n", "丙" * 20]
     chunks = split_markdown("".join(paragraphs), count_tokens=len, max_tokens=45, min_tokens=0)
@@ -88,7 +88,7 @@ def test_long_sections_split_at_paragraphs_before_sentences():
 
 
 def test_long_paragraphs_fall_back_to_sentences():
-    from app.chunking import split_markdown
+    from app.modules.retrieval.public import split_markdown
 
     sentences = ["甲" * 20 + "。", "乙" * 20 + "！", "丙" * 20 + "？"]
     chunks = split_markdown("".join(sentences), count_tokens=len, max_tokens=30, min_tokens=0)
@@ -97,7 +97,7 @@ def test_long_paragraphs_fall_back_to_sentences():
 
 
 def test_hard_splits_keep_unicode_and_contiguous_byte_offsets():
-    from app.chunking import split_markdown
+    from app.modules.retrieval.public import split_markdown
 
     text = "🙂汉" * 90
     chunks = split_markdown(text, count_tokens=len, max_tokens=31, min_tokens=0)
@@ -112,7 +112,7 @@ def test_hard_splits_keep_unicode_and_contiguous_byte_offsets():
 
 
 def test_code_block_that_fits_is_not_split_at_internal_blank_lines():
-    from app.chunking import split_markdown
+    from app.modules.retrieval.public import split_markdown
 
     block = "```python\n# comment\n\nvalue=1\n```\n"
     text = "# Root\n前言。\n" + block + "附言" * 12 + "。"
@@ -124,7 +124,7 @@ def test_code_block_that_fits_is_not_split_at_internal_blank_lines():
 
 
 def test_oversized_code_block_hard_splits_without_creating_headings():
-    from app.chunking import split_markdown
+    from app.modules.retrieval.public import split_markdown
 
     text = "# Root\n```python\n" + "# not a section\nvalue=1\n" * 30 + "```\n"
     chunks = split_markdown(text, count_tokens=len, max_tokens=96, min_tokens=0)
@@ -135,7 +135,7 @@ def test_oversized_code_block_hard_splits_without_creating_headings():
 
 
 def test_budget_includes_heading_and_special_tokens():
-    from app.chunking import split_markdown
+    from app.modules.retrieval.public import split_markdown
 
     text = "# A long heading\n" + "甲" * 30
     count_tokens = lambda content: len(content) + 2
@@ -147,14 +147,14 @@ def test_budget_includes_heading_and_special_tokens():
 
 
 def test_heading_larger_than_budget_is_reported_not_truncated():
-    from app.chunking import split_markdown
+    from app.modules.retrieval.public import split_markdown
 
     with pytest.raises(ValueError, match="heading|max_tokens"):
         split_markdown("# " + "长标题" * 20 + "\n正文", count_tokens=len, max_tokens=20, min_tokens=0)
 
 
 def test_minimum_is_soft_when_merging_would_exceed_maximum():
-    from app.chunking import split_markdown
+    from app.modules.retrieval.public import split_markdown
 
     text = "a" * 8 + "\n\n" + "b" * 25
     chunks = split_markdown(text, count_tokens=len, max_tokens=30, min_tokens=20)
@@ -167,7 +167,7 @@ def test_minimum_is_soft_when_merging_would_exceed_maximum():
 
 @pytest.mark.parametrize("fence", ["```", "~~~"])
 def test_unicode_whitespace_does_not_close_a_code_fence(fence):
-    from app.chunking import split_markdown
+    from app.modules.retrieval.public import split_markdown
 
     body = "code " * 18
     text = f"{fence}\n{body}\n{fence}\u00a0\n# inside\n{body}\n{fence}\n# outside\n{body}"
@@ -180,7 +180,7 @@ def test_unicode_whitespace_does_not_close_a_code_fence(fence):
 
 @pytest.mark.parametrize("fence", ["```", "~~~"])
 def test_unicode_separator_does_not_create_a_markdown_line(fence):
-    from app.chunking import split_markdown
+    from app.modules.retrieval.public import split_markdown
 
     body = "code " * 18
     text = f"{fence}\n{body}\ncode\u2028{fence}\n# inside\n{body}\n{fence}\n# outside\n{body}"
@@ -192,7 +192,7 @@ def test_unicode_separator_does_not_create_a_markdown_line(fence):
 
 
 def test_carriage_return_only_fence_lines_are_preserved():
-    from app.chunking import split_markdown
+    from app.modules.retrieval.public import split_markdown
 
     text = "# Root\r```python\r# code\r```\r## Next\rbody"
     chunks = split_markdown(text, count_tokens=len, min_tokens=0)
