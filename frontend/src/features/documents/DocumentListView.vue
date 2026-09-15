@@ -17,10 +17,15 @@ let pollingTimer: ReturnType<typeof setTimeout> | undefined
 let searchTimer: ReturnType<typeof setTimeout> | undefined
 let disposed = false
 
+function schedulePolling() {
+  clearTimeout(pollingTimer)
+  if (!disposed && library.hasPending) pollingTimer = setTimeout(() => void refresh(true), 2000)
+}
+
 async function refresh(quiet = false) {
   clearTimeout(pollingTimer)
   await library.load(quiet)
-  if (!disposed && library.hasPending) pollingTimer = setTimeout(() => void refresh(true), 2000)
+  schedulePolling()
 }
 
 function search() {
@@ -53,6 +58,7 @@ function openDocument(id: number) {
 }
 
 watch(() => [library.search, library.filter, library.page], () => void refresh(), { immediate: true })
+watch(() => library.hasPending, schedulePolling)
 onUnmounted(() => {
   disposed = true
   clearTimeout(pollingTimer)
