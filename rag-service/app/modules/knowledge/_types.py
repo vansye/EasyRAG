@@ -88,7 +88,7 @@ class StoredChunk:
     text: str
     byte_start: int
     byte_end: int
-    heading_path: str
+    heading_path: str | None
     token_count: int
 
 
@@ -100,10 +100,17 @@ class Source:
     text: str
     byte_start: int
     byte_end: int
-    heading_path: str
+    heading_path: str | None
 
 
 @dataclass(frozen=True)
 class UpdateResult:
     document: Document
     changed: bool
+
+
+@dataclass(frozen=True)
+class DocumentSnapshot:
+    document: Document
+    chunks: tuple[StoredChunk, ...]
+    chunks_valid: bool
