@@ -1,0 +1,62 @@
+# EasyRAG 前端工作台
+
+Vue 3、TypeScript、Pinia、Vite。采用「资料库 / 知识问答」两个页面，以共享资料抽屉核验原文；暖灰背景、白色内容区、深绿色按钮，标题使用系统中文衬线字体。
+
+## 启动
+
+需要 Node.js 20.19+ 或 22.12+（本机和 CI 使用 Node 24），以及已经启动的 Java 8080、Python 8000。
+
+```powershell
+cd frontend
+npm ci
+npm run dev -- --host 127.0.0.1 --port 5173
+```
+
+打开 http://127.0.0.1:5173/ 。Vite 将 `/api` 和 `/health` 转发到 Java。生产环境需同源反向代理这两个路径，并将前端路由回退到 `index.html`。
+
+服务重启后，如果顶部提示需要确认，应检查服务后手动点击「确认就绪」。页面不会自动调用恢复接口。
+
+## 当前范围
+
+- 资料库：单份 `.md` / `.txt` 上传与拖放，UTF-8、1 MB 上限；标题搜索、状态筛选、分页和处理状态更新。
+- 资料抽屉：原文、引用片段、正文编辑、重新处理、删除确认。关闭恢复焦点；方向键与 Home/End 切换原文和片段。
+- 问答：多行输入、Ctrl/Command + Enter、实际等待时间、失败保留问题；切换两个页面后保留当前问答，刷新网页会清空。
+- 回答：标题、列表、粗体、代码、表格；正文引用定位出处卡片，卡片打开对应原文片段；部分覆盖与依据不足分别呈现。
+- 溯源：编号按检索排名与 `chunk_id` 对应，独立统计正文引用与检索结果；不把未引用片段称为「被丢弃」。
+- 模型：从 `/api/runtime` 展示真实回答与检索模型；问答框的模型入口可以配置回答模型，支持 OpenAI 兼容接口、DeepSeek 和本地 Ollama。
+
+问答或资料处理进行时，页面暂停新的资料变更。资料更新、重建或删除后，本页面保留的旧回答会显示提醒。回答中的 HTML 作为文字展示；外部图片不会自动加载。
+
+## 回答模型配置
+
+在「知识问答」打开模型信息，点击「配置回答模型」，填写服务类型、模型名称、接口地址和 API Key。「保存并使用」从下一次提问生效，正在进行的问答保留原来的模型实例；已有回答也会保留。
+
+已配置的密钥不会回填到输入框，留空可沿用，但更换服务类型或接口地址时必须填写新密钥。地址只接受 HTTP(S)，用户信息、查询参数和片段均须移除，凭据只填在 API Key 一栏。本地 Ollama 使用 `http://localhost:11434/v1`，API Key 可填 `ollama`。
+
+浏览器只通过 Java 的 `GET/PUT/DELETE /api/model-config` 读写配置。Python 原子写入本机 `rag-service/config/llm.json`，或 `LLM_CONFIG_FILE` 指定的位置；文件包含明文密钥，已被 Git 忽略。密钥不会回传，也不会进入 localStorage / sessionStorage。「恢复启动配置」移除覆盖文件，重新使用环境变量 / `.env`，不修改原文件。
+
+接口地址的回读、密钥沿用判断和实际模型调用采用同一解析结果。未设置 `LLM_BASE_URL` 时，OpenAI 兼容 SDK 的地址顺序为 `OPENAI_API_BASE`、启用的 `LANGSMITH_GATEWAY`、`OPENAI_BASE_URL`、官方默认地址；DeepSeek 使用 `DEEPSEEK_API_BASE` 或 `https://api.deepseek.com/v1`。旧环境地址若夹带凭据，配置接口会返回脱敏错误。
+
+保存会校验字段并持久化，模型能否正常回答由实际提问验证。嵌入模型保持只读，切换回答模型无需重新处理资料。会话历史、流式输出和多套模型配置档案留待后续迭代。
+
+## 验证
+
+```powershell
+npm test
+npm run build
+
+# 先保持 npm run dev 运行；使用本机已安装的 Chrome
+npm run test:browser
+npm run test:browser:models
+
+# 对真实本地服务验证，会创建并清理一份独立临时资料，并调用当前模型
+node tests/browser-live.mjs
+```
+
+`test:browser` 使用隔离的接口数据，覆盖搜索、引用、编辑、旧回答提示、删除确认、上传、键盘切换和 390 px 页面。`test:browser:models` 覆盖配置保存、失败重试、密钥边界、刷新回读、恢复启动配置、焦点恢复和窄屏布局。
+
+`browser-live.mjs` 先在网页保存当前模型（沿用已有接口与密钥）并刷新回读，再验证实际上传、索引、问答、修改、重新处理和删除；最后比较原有文档及切片的哈希。如果原来使用启动配置，测试会恢复它并移除临时覆盖文件。真实模型超时会如实使实测失败，响应状态和耗时记录在报告中。
+
+截图在 `.verification/screenshots/`；真实联调报告在 `.verification/live-report.json`。这些本地运行产物已忽略，不进入版本管理。
+
+目录与接口边界、文件改动说明见 [前端设计与实施记录](../docs/子Issue-E-前端.md)。

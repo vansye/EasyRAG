@@ -23,7 +23,9 @@ from app.chunking import split_markdown
 from app.config import Settings, get_settings
 from app.embedding import EmbeddingChunk, EmbeddingResponseError, embed_texts, embedding_headers, embedding_url
 from app.index_store import ChunkIdConflict, IndexStore, IndexWriteError
+from app.model_config import ModelConfigUnavailable
 from app.qa import QaError, QaPipeline, QaRequest, QaResponse
+from app.runtime import router as runtime_router
 
 SERVICE_NAME = "easyrag-rag-service"
 
@@ -48,6 +50,7 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+app.include_router(runtime_router)
 
 
 async def _probe_embedding(settings: Settings) -> dict[str, Any]:
@@ -260,6 +263,10 @@ def answer_question(payload: QaRequest) -> QaResponse:
         raise HTTPException(status_code=503, detail={
             "error": "LLM_UNAVAILABLE", "cause": "QA_PIPELINE",
             "detail": str(exc)[:200],
+        }) from exc
+    except ModelConfigUnavailable as exc:
+        raise HTTPException(status_code=503, detail={
+            "error": "LLM_CONFIG_UNAVAILABLE", "cause": "ModelConfigUnavailable",
         }) from exc
     except pydantic.ValidationError as exc:
         # LlmSettings 缺必填项（未配置 LLM_ 环境变量）：这是部署配置缺失，

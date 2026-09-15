@@ -1,5 +1,7 @@
 package com.easyrag.server.document;
 
+import com.easyrag.server.rag.RagOperationGate;
+
 /**
  * 收录完成后的索引推进入口。
  *
@@ -12,4 +14,7 @@ package com.easyrag.server.document;
 public interface IndexingTrigger {
 
     void submit(long documentId);
+
+    /** 已有资料变更把租约交给同一执行器，避免排队期间新问答抢先进入。 */
+    void submit(long documentId, RagOperationGate.Lease lease);
 }

@@ -1,5 +1,7 @@
 package com.easyrag.server.document;
 
+import com.easyrag.server.rag.RagOperationGate;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -11,7 +13,8 @@ import org.springframework.stereotype.Component;
  *
  * submit 只做一件事：把 documentId 交给单线程执行器。全部编排逻辑在
  * DocumentIndexingService.index() —— 闸门申请、五阶段推进、失败清理都在
- * 那里，本类不重复任何业务判断。
+ * 那里，本类不重复任何业务判断。已有资料的更新/重试可同时交接已获取的
+ * MUTATION 租约，由同一个执行器持有到最终状态确认。
  *
  * 两条边界：
  * 1. 闸门未就绪（RECOVERY_REQUIRED）时 index() 返回 Outcome.BUSY，文档
@@ -43,6 +46,18 @@ public class AsyncIndexingTrigger implements IndexingTrigger {
         } catch (RuntimeException failure) {
             // index() 对可预期失败已有完整落库与日志；到这里的是未预期路径
             LOGGER.error("unexpected failure indexing document {}", documentId, failure);
+        }
+    }
+
+    @Override
+    @Async("indexingExecutor")
+    public void submit(long documentId, RagOperationGate.Lease lease) {
+        try (lease) {
+            indexingService.index(documentId, lease);
+        } catch (RuntimeException failure) {
+            LOGGER.atError().addKeyValue("document_id", documentId)
+                    .addKeyValue("failure", failure.getClass().getSimpleName())
+                    .log("unexpected failure indexing changed document");
         }
     }
 }

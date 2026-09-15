@@ -103,6 +103,29 @@ class DocumentControllerTest {
     }
 
     @Test
+    void passesTrimmedTitleSearchAlongsideStatusAndPagination() throws Exception {
+        given(documents.findPage("INDEXED", "缓存", 1, 10)).willReturn(
+                new DocumentQueryRepository.DocumentPage(0, List.of()));
+
+        mockMvc.perform(get("/api/documents").param("status", "indexed").param("q", "  缓存  ")
+                        .param("page", "1").param("size", "10"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
+
+        then(documents).should().findPage("INDEXED", "缓存", 1, 10);
+    }
+
+    @Test
+    void blankTitleSearchKeepsTheExistingUnfilteredListContract() throws Exception {
+        given(documents.findPage(null, 0, 20)).willReturn(
+                new DocumentQueryRepository.DocumentPage(0, List.of()));
+
+        mockMvc.perform(get("/api/documents").param("q", "  "))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
+
+        then(documents).should().findPage(null, 0, 20);
+    }
+
+    @Test
     @DisplayName("非法查询参数：未知 status、负 page、越界 size 都返回 400")
     void rejectsBadQueryParameters() throws Exception {
         mockMvc.perform(get("/api/documents").param("status", "BROKEN"))

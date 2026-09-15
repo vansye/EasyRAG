@@ -16,6 +16,7 @@ target/
 !.mvn/wrapper/maven-wrapper.jar
 # 凭据只从环境变量来，配置文件不入库（教训来自个人博客项目 A12）
 /server/config/
+/rag-service/config/
 application-local.yaml
 application-local.yml
 

@@ -1,18 +1,34 @@
 package com.easyrag.server.document;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.easyrag.server.rag.RagOperationGate;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClientResponseException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.net.http.HttpTimeoutException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
@@ -160,5 +176,63 @@ class QuestionControllerTest {
         mockMvc.perform(post("/api/questions")
                         .contentType("application/json").content("{\"question\": \"问题\"}"))
                 .andExpect(status().isBadGateway());
+    }
+
+    @ParameterizedTest
+    @MethodSource("upstreamFailures")
+    @DisplayName("问答失败日志包含默认格式可见的类别和耗时，不泄露请求或上游细节")
+    void logsSafeFailureDiagnosticsAndReleasesQueryLease(
+            RuntimeException failure, String causeType, String upstreamStatus) throws Exception {
+        makeGateReady();
+        given(ragQueryClient.ask(anyString())).willAnswer(invocation -> {
+            Thread.sleep(25);
+            throw failure;
+        });
+        Logger logger = (Logger) LoggerFactory.getLogger(QuestionController.class);
+        ListAppender<ILoggingEvent> events = new ListAppender<>();
+        events.start();
+        logger.addAppender(events);
+        try {
+            mockMvc.perform(post("/api/questions").contentType("application/json")
+                            .header("Authorization", "Bearer private-api-key")
+                            .content("{\"question\":\"private-question\"}"))
+                    .andExpect(status().isBadGateway())
+                    .andExpect(jsonPath("$.error").value("问答服务暂时不可用"));
+
+            assertThat(realGate.state()).isEqualTo(RagOperationGate.State.READY);
+            then(documents).shouldHaveNoInteractions();
+            assertThat(events.list).hasSize(1);
+            ILoggingEvent event = events.list.get(0);
+            assertThat(event.getThrowableProxy()).isNull();
+            String message = event.getFormattedMessage();
+            assertThat(message).startsWith("question_upstream_failure ")
+                    .contains("exception_type=" + failure.getClass().getSimpleName(),
+                            "cause_type=" + causeType, "upstream_status=" + upstreamStatus)
+                    .doesNotContain("private-question", "private-model.example.test", "private-api-key",
+                            "private-header", "private-response-body", "private-status-text", "Authorization");
+            var elapsed = Pattern.compile("duration_ms=(\\d+)").matcher(message);
+            assertThat(elapsed.find()).isTrue();
+            assertThat(Long.parseLong(elapsed.group(1))).isGreaterThanOrEqualTo(20);
+        } finally {
+            logger.detachAppender(events);
+            events.stop();
+        }
+    }
+
+    static Stream<Arguments> upstreamFailures() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth("private-api-key");
+        headers.set("X-Private-Header", "private-header");
+        return Stream.of(
+                Arguments.of(new ResourceAccessException("https://private-model.example.test/v1",
+                        new HttpTimeoutException("Authorization: Bearer private-api-key")),
+                        "HttpTimeoutException", "none"),
+                Arguments.of(new RestClientResponseException("private-response-body",
+                        HttpStatus.SERVICE_UNAVAILABLE, "private-status-text", headers,
+                        "private-response-body".getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8),
+                        "RestClientResponseException", "503"),
+                Arguments.of(new IllegalArgumentException("private-response-body",
+                        new IllegalArgumentException("https://private-model.example.test/v1")),
+                        "IllegalArgumentException", "none"));
     }
 }

@@ -45,19 +45,24 @@ public class DocumentIndexingService {
     }
 
     public IndexingResult index(long documentId) {
-        if (documentId <= 0) {
-            throw new IllegalArgumentException("document_id must be positive");
-        }
-        if (TransactionSynchronizationManager.isActualTransactionActive()) {
-            throw new IllegalStateException("document indexing cannot run inside a database transaction");
-        }
+        validateInvocation(documentId);
         ExecutionTrace trace = new ExecutionTrace();
         var admission = gate.tryAcquire(Operation.MUTATION);
         if (admission.lease().isEmpty()) {
             return trace.finish(documentId, Outcome.BUSY,
                     admission.state() == State.RECOVERY_REQUIRED || admission.state() == State.RECOVERING, null);
         }
-        try (var lease = admission.lease().orElseThrow()) {
+        return index(documentId, admission.lease().orElseThrow(), trace);
+    }
+
+    /** 资料更新/手动重索引已获取许可，后台沿用它，不在提交与执行之间开放查询。 */
+    IndexingResult index(long documentId, RagOperationGate.Lease lease) {
+        validateInvocation(documentId);
+        return index(documentId, lease, new ExecutionTrace());
+    }
+
+    private IndexingResult index(long documentId, RagOperationGate.Lease lease, ExecutionTrace trace) {
+        try (lease) {
             Optional<DocumentIndexRepository.PendingDocument> pending;
             try {
                 pending = trace.measure(Stage.LOAD_DOCUMENT, () -> documents.findPending(documentId));
@@ -89,6 +94,15 @@ public class DocumentIndexingService {
             } catch (RuntimeException failure) {
                 return finishFailure(documentId, stage, failure, lease, trace);
             }
+        }
+    }
+
+    private static void validateInvocation(long documentId) {
+        if (documentId <= 0) {
+            throw new IllegalArgumentException("document_id must be positive");
+        }
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException("document indexing cannot run inside a database transaction");
         }
     }
 

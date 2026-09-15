@@ -29,11 +29,19 @@ class ReadinessRaceReproTest {
 
     /** 每次 submit 时记录闸门状态与是否拿到租约，模拟单线程 worker 立即执行。 */
     private final List<String> submissions = new CopyOnWriteArrayList<>();
-    private final IndexingTrigger immediateWorker = documentId -> {
-        var admission = gate.tryAcquire(RagOperationGate.Operation.MUTATION);
-        submissions.add("doc" + documentId + "@" + gate.state()
-                + (admission.lease().isPresent() ? "/GOT_LEASE" : "/BUSY"));
-        admission.lease().ifPresent(RagOperationGate.Lease::confirmCompletion);
+    private final IndexingTrigger immediateWorker = new IndexingTrigger() {
+        @Override
+        public void submit(long documentId) {
+            var admission = gate.tryAcquire(RagOperationGate.Operation.MUTATION);
+            submissions.add("doc" + documentId + "@" + gate.state()
+                    + (admission.lease().isPresent() ? "/GOT_LEASE" : "/BUSY"));
+            admission.lease().ifPresent(RagOperationGate.Lease::confirmCompletion);
+        }
+
+        @Override
+        public void submit(long documentId, RagOperationGate.Lease lease) {
+            throw new AssertionError("recovery scan must let each indexing task acquire its own lease");
+        }
     };
 
     /** 模拟库内 PENDING 集合，收录会往里加，扫描按当前快照返回。 */

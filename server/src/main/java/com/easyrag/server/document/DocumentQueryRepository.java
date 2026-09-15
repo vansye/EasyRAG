@@ -59,12 +59,23 @@ public class DocumentQueryRepository {
     }
 
     public DocumentPage findPage(String status, int page, int size) {
-        boolean filtered = status != null && !status.isBlank();
-        String where = filtered ? "deleted_at IS NULL AND index_status = ?" : "deleted_at IS NULL";
+        return findPage(status, null, page, size);
+    }
 
-        Long total = filtered
-                ? jdbcTemplate.queryForObject("SELECT COUNT(*) FROM document WHERE " + where, Long.class, status)
-                : jdbcTemplate.queryForObject("SELECT COUNT(*) FROM document WHERE " + where, Long.class);
+    public DocumentPage findPage(String status, String query, int page, int size) {
+        String where = "deleted_at IS NULL";
+        List<Object> parameters = new ArrayList<>();
+        if (status != null && !status.isBlank()) {
+            where += " AND index_status = ?";
+            parameters.add(status);
+        }
+        if (query != null && !query.isBlank()) {
+            // LOCATE 做普通文字包含查询，用户输入的 % / _ 不变成 LIKE 通配符。
+            where += " AND LOCATE(?, title) > 0";
+            parameters.add(query.strip());
+        }
+        Long total = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM document WHERE " + where,
+                Long.class, parameters.toArray());
 
         // 用 formatted 而非 text block 拼接：收尾引号前的空白会被 text block
         // 剥掉、拼接处也没有换行，"WHERE """ + where + """ORDER BY" 实际拼出
@@ -78,9 +89,9 @@ public class DocumentQueryRepository {
                 ORDER BY d.updated_at DESC, d.id DESC
                 LIMIT ? OFFSET ?
                 """.formatted(where);
-        List<DocumentSummary> items = filtered
-                ? jdbcTemplate.query(itemsSql, this::mapSummary, status, size, (long) page * size)
-                : jdbcTemplate.query(itemsSql, this::mapSummary, size, (long) page * size);
+        parameters.add(size);
+        parameters.add((long) page * size);
+        List<DocumentSummary> items = jdbcTemplate.query(itemsSql, this::mapSummary, parameters.toArray());
         return new DocumentPage(total == null ? 0 : total, items);
     }
 
@@ -198,7 +209,7 @@ public class DocumentQueryRepository {
                 resultSet.getTimestamp("updated_at").toLocalDateTime());
     }
 
-    private static List<String> readTags(String storedTags) {
+    static List<String> readTags(String storedTags) {
         if (storedTags == null) {
             return List.of();
         }

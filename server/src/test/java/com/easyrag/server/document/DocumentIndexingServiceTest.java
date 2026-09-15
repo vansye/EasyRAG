@@ -168,6 +168,38 @@ class DocumentIndexingServiceTest {
     }
 
     @Test
+    void continuesTheMutationLeaseReceivedFromDocumentUpdateUntilIndexingCommits() {
+        var lease = gate.tryAcquire(Operation.MUTATION).lease().orElseThrow();
+        assertThat(gate.tryAcquire(Operation.QUERY).lease()).isEmpty();
+
+        var result = service.index(DOCUMENT_ID, lease);
+
+        assertThat(result).isNotNull();
+        assertThat(result.outcome()).isEqualTo(Outcome.INDEXED);
+        assertThat(observedStates).containsOnly(State.MUTATING);
+        assertThat(calls).containsExactly(Stage.LOAD_DOCUMENT, Stage.CHUNK, Stage.SAVE_CHUNKS,
+                Stage.EMBED, Stage.MARK_INDEXED);
+        assertThat(gate.state()).isEqualTo(State.READY);
+    }
+
+    @Test
+    void handedOffMutationUsesTheSameFailedIndexCleanupAndRecoveryRules() {
+        var lease = gate.tryAcquire(Operation.MUTATION).lease().orElseThrow();
+        embedReply = Reply.json(503,
+                "{\"detail\":{\"error\":\"EMBEDDING_UNAVAILABLE\",\"cause\":\"RuntimeError\"}}");
+
+        var result = service.index(DOCUMENT_ID, lease);
+
+        assertThat(result).isNotNull();
+        assertThat(result.outcome()).isEqualTo(Outcome.FAILED);
+        assertThat(result.recoveryRequired()).isFalse();
+        assertThat(result.error()).contains("stage=EMBED", "cleanup=OK");
+        verify(documents).markFailed(eq(DOCUMENT_ID), anyString());
+        assertThat(calls).endsWith(Stage.DELETE_INDEX, Stage.MARK_FAILED);
+        assertThat(gate.state()).isEqualTo(State.READY);
+    }
+
+    @Test
     void sendsMoreThan64ChunksInOneEmbedRequest() {
         String text = "x".repeat(65);
         var document = new DocumentIndexRepository.PendingDocument(DOCUMENT_ID, text, TITLE, TAGS);
