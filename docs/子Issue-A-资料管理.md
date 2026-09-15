@@ -1,5 +1,37 @@
 # 子 Issue A：资料管理模块
 
+## FastAPI 迁移设计（2026-09-15，当前实施范围）
+
+父 Issue #1。位置迁移至 `app/modules/knowledge`。总体边界见 [模块设计](fastapi-modules.md)。下面旧 Spring Boot 章节保留为历史契约和验证记录。
+
+A 独占 document/chunk、输入解析、哈希、数据库迁移和文档状态；不调用 B/C/F，不包含 HTTP 路由、后台调度或索引计算。G 通过公开入口调用 A，数据库连接和行对象不跨模块。
+
+```python
+Document = {id, source_type, source_uri, title, content, content_hash,
+            tags, index_status, index_error, created_at, updated_at}
+Chunk = {id, document_id, seq, text, byte_start, byte_end, heading_path, token_count}
+create(filename, content_bytes) -> Document
+list(page, size, status, q) -> {total, items}
+get(id) -> Document
+update(id, content) -> {document, changed}
+prepare_reindex(id) -> Document
+delete(id) -> None
+begin_indexing(id, chunk_drafts) -> tuple[Chunk]
+mark_indexed(id) -> None
+mark_failed(id, error) -> None
+pending_ids() -> tuple[int]
+sources(chunk_ids) -> tuple[Source]
+```
+
+内部采用 SQLAlchemy Core + PyMySQL 与 Alembic。空库建立 V2 等价结构；旧库校验 Flyway V2 和真实 schema 后显式登记基线，保留 IDs、原迁移记录及业务数据。保留 UTF-8/BOM、1 MiB、标题/来源限制、Java 哈希空白语义、字面量搜索、实际 chunk_count、updated_at 与短事务回滚规则。
+
+- [ ] PR：数据库结构、迁移和旧库接管；真实 MySQL 8 验证，无 SQLite 替代。
+- [ ] PR：输入、查询与资料变更；保留已知 Unicode、元数据和同哈希行为。
+- [ ] PR：切片、状态与出处；失败共同回滚，切片替换使用 READ COMMITTED，状态转换由具名方法维护。
+- [ ] 单独测试本模块，无 Chroma、模型和 FastAPI 依赖；模块 import 约束通过。
+
+## 历史实现与契约：Spring Boot 阶段
+
 > 父 Issue：#1 总功能文档
 > 位置：Spring Boot（`server/`）
 > 对应考察点：知识组织与管理（设计文档必答题 1 的前半）
