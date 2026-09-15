@@ -2,7 +2,7 @@
 
 ## FastAPI 迁移设计（2026-09-15，当前实施范围）
 
-父 Issue #1。位置：`app/modules/retrieval`，总体见 [模块设计](fastapi-modules.md)。旧内部 HTTP 章节作为历史契约和测试证据保留。
+Issue [#3](https://github.com/vansye/EasyRAG/issues/3)，父 Issue #1。位置：`app/modules/retrieval`，总体见 [模块设计](fastapi-modules.md)。旧内部 HTTP 章节作为历史契约和测试证据保留。
 
 B 独占切片、tokenizer、embedding 和 Chroma。只接受数据快照，不读取 MySQL、不调用 A/C/F/G，不解释文档业务状态、不包含 FastAPI。所有公开能力由 public 入口提供。
 
@@ -17,14 +17,19 @@ delete_document(document_id) -> int
 search(query, top_k=5) -> tuple[SearchHit]
 inspect() -> tuple[IndexEntry]
 reset() -> None
+runtime_info() -> RuntimeReport
 health() -> DependencyReport
+close() -> None
 ```
 
 先完成整篇 embedding 校验再变更索引；局部写入失败在模块内部尝试清理，并明确暴露清理是否已确认，交由 G 决定恢复。索引/SDK 对象不出模块。保留向量检索和现有元数据守门；不在迁移时启用 BM25 或更换算法。reset 只由维护用例调用，不暴露公开 HTTP。
 
-- [ ] PR：抽出模块配置与切片公开入口，保留全部 Unicode/token 预算回归。
-- [ ] PR：索引维护与检索公开入口，隔离 Chroma 测试成功、部分失败、清理失败及索引快照。
-- [ ] 原评估工具仅通过公开切片入口使用算法；模块 import 约束通过。
+- [x] 抽出模块配置与切片公开入口，保留全部 Unicode/token 预算回归（PR #41、#48）。
+- [x] 索引维护与检索公开入口，隔离 Chroma 测试成功、部分失败、清理失败及索引快照（PR #41）。
+- [x] 原评估工具仅通过公开切片入口使用算法；模块 import 约束通过（PR #47）。
+- [x] 真实 Chroma 重建、重开和元数据核验；空标签显式传 `None` 清除复用 ID 上的残留标签（PR #54）。
+
+实现见 [PR #41](https://github.com/vansye/EasyRAG/pull/41)、[保留回归 #48](https://github.com/vansye/EasyRAG/pull/48)、[真实恢复 #54](https://github.com/vansye/EasyRAG/pull/54)。collection 的 document 载荷为原文正文，标题只影响 embedding 输入并保留在 metadata；非空 tags 使用字符串数组。本次没有切换检索算法或重新声称召回提升。
 
 ## 历史实现与契约：内部 HTTP 阶段
 

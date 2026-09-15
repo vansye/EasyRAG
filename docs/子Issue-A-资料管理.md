@@ -2,7 +2,7 @@
 
 ## FastAPI 迁移设计（2026-09-15，当前实施范围）
 
-父 Issue #1。位置迁移至 `app/modules/knowledge`。总体边界见 [模块设计](fastapi-modules.md)。下面旧 Spring Boot 章节保留为历史契约和验证记录。
+Issue [#2](https://github.com/vansye/EasyRAG/issues/2)，父 Issue #1。位置迁移至 `app/modules/knowledge`。总体边界见 [模块设计](fastapi-modules.md)。下面旧 Spring Boot 章节保留为历史契约和验证记录。
 
 A 独占 document/chunk、输入解析、哈希、数据库迁移和文档状态；不调用 B/C/F，不包含 HTTP 路由、后台调度或索引计算。G 通过公开入口调用 A，数据库连接和行对象不跨模块。
 
@@ -21,14 +21,19 @@ mark_indexed(id) -> None
 mark_failed(id, error) -> None
 pending_ids() -> tuple[int]
 sources(chunk_ids) -> tuple[Source]
+snapshots() -> tuple[DocumentSnapshot]  # A 维护 chunks_valid，G 不读取 SQL 私有结构
+begin_rebuild(id, chunk_drafts, *, expected_content) -> tuple[Chunk]
 ```
 
 内部采用 SQLAlchemy Core + PyMySQL 与 Alembic。空库建立 V2 等价结构；旧库校验 Flyway V2 和真实 schema 后显式登记基线，保留 IDs、原迁移记录及业务数据。保留 UTF-8/BOM、1 MiB、标题/来源限制、Java 哈希空白语义、字面量搜索、实际 chunk_count、updated_at 与短事务回滚规则。
 
-- [ ] PR：数据库结构、迁移和旧库接管；真实 MySQL 8 验证，无 SQLite 替代。
-- [ ] PR：输入、查询与资料变更；保留已知 Unicode、元数据和同哈希行为。
-- [ ] PR：切片、状态与出处；失败共同回滚，切片替换使用 READ COMMITTED，状态转换由具名方法维护。
-- [ ] 单独测试本模块，无 Chroma、模型和 FastAPI 依赖；模块 import 约束通过。
+- [x] 数据库结构、迁移和旧库接管；真实 MySQL 8 验证，无 SQLite 替代（PR #42）。
+- [x] 输入、查询与资料变更；保留已知 Unicode、元数据和同哈希行为（PR #40、#43）。
+- [x] 切片、状态与出处；失败共同回滚，切片替换使用 READ COMMITTED，状态转换由具名方法维护（PR #43）。
+- [x] 恢复快照与切片 ID 复用：仅当正文和当前切片参数的结果完全一致时保留 ID（PR #49、#54）。
+- [x] 单独测试本模块，无 Chroma、模型和 FastAPI 依赖；模块 import 约束通过。
+
+实现 PR：[输入 #40](https://github.com/vansye/EasyRAG/pull/40)、[接管 #42](https://github.com/vansye/EasyRAG/pull/42)、[CRUD #43](https://github.com/vansye/EasyRAG/pull/43)、[恢复 #49](https://github.com/vansye/EasyRAG/pull/49)。本次接管本机数据的实际结果另见 [切换记录](fastapi-cutover.md)，不以隔离测试代替实际迁移结果。
 
 ## 历史实现与契约：Spring Boot 阶段
 

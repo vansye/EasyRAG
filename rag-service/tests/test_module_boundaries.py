@@ -92,11 +92,7 @@ def test_business_modules_exist_and_obey_ownership():
 def test_application_uses_only_public_module_entrypoints():
     directory = APP / "application"
     assert directory.is_dir(), "missing application composition boundary"
-    # These old HTTP adapters remain runnable during the staged migration.
-    # The cutover PR removes both the adapters and this temporary exemption.
-    legacy = {"main.py", "runtime.py", "model_config.py", "llm.py", "qa.py", "retrieval.py",
-              "config.py", "embedding.py", "chunking.py", "index_store.py"}
-    paths = [*directory.rglob("*.py"), *(p for p in APP.glob("*.py") if p.name not in legacy)]
+    paths = [*directory.rglob("*.py"), *APP.glob("*.py")]
     for path in paths:
         package = ".".join(path.parent.relative_to(APP.parent).parts)
         assert not violations(path.read_text(encoding="utf-8-sig"), package, None), path

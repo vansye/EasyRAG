@@ -2,7 +2,7 @@
 
 ## FastAPI 迁移设计（2026-09-15，当前实施范围）
 
-父 Issue #1。位置：`app/modules/qa`，总体见 [模块设计](fastapi-modules.md)。旧 Java 入口与具体 IndexStore 调用作为历史记录保留。
+Issue [#27](https://github.com/vansye/EasyRAG/issues/27)，父 Issue #1。位置：`app/modules/qa`，总体见 [模块设计](fastapi-modules.md)。旧 Java 入口与具体 IndexStore 调用作为历史记录保留。
 
 C 自己维护提示词、判断、生成、拒答、引用编号和 trace，只依赖自己声明的能力端口。检索适配器和模型会话由 G 注入；不得 import A/B/F/G、FastAPI、Chroma 或模型 SDK。无需数据库或模型服务即可单独测试。
 
@@ -16,9 +16,11 @@ answer(question, search: SearchPort, chat: ChatPort, top_k=5) -> AnswerDraft
 
 保留现有三态判断、提示词、轮次和 trace 字段；不启用此前尚未实现的改写或额外模型调用。NONE 不生成；模型输出无法解析是技术失败，不伪装成库外拒答。每次问答的临时 trace 独立。C 输出 chunk ID，最终业务出处由 G 调 A 补充。
 
-- [ ] PR：能力端口与问答引擎，注入检索/模型替身完成三态、引用、解析失败及请求状态隔离回归。
-- [ ] 集成验证判定与生成使用同一模型会话；模型更换不影响在途问答。
-- [ ] 模块 import 约束通过；G 的适配器变化不修改 C 的算法实现。
+- [x] 能力端口与问答引擎，注入检索/模型替身完成三态、引用、解析失败及请求状态隔离回归（PR #46）。
+- [x] 集成验证判定与生成使用同一模型会话；模型更换不影响在途问答（PR #52、#55）。
+- [x] 模块 import 约束通过；G 的适配器变化不修改 C 的算法实现。
+
+实现见 [PR #46](https://github.com/vansye/EasyRAG/pull/46)，问答装配与最终 trace rank 对齐见 [PR #52](https://github.com/vansye/EasyRAG/pull/52)，真实 SQL/Chroma/HTTP 模型集成见 [PR #55](https://github.com/vansye/EasyRAG/pull/55)。改写重查保留原规划状态，本次不增加调用轮数。
 
 ## 历史实现与契约：旧调用入口
 

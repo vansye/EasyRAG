@@ -56,6 +56,11 @@ Knowledge.mark_indexed(document_id) -> None
 Knowledge.mark_failed(document_id, error) -> None
 Knowledge.pending_ids() -> tuple[int]
 Knowledge.sources(chunk_ids) -> tuple[Source]
+DocumentSnapshot = {document, chunks, chunks_valid}
+Knowledge.snapshots() -> tuple[DocumentSnapshot]
+Knowledge.begin_rebuild(document_id, chunks, *, expected_content) -> tuple[StoredChunk]
+Knowledge.initialize_database() -> None
+Knowledge.adopt_legacy_database() -> None
 
 # B 不知道 SQL 或文档业务状态；所有索引对象留在模块内。
 ChunkDraft = {text, byte_start, byte_end, heading_path, token_count}
@@ -68,6 +73,9 @@ Retrieval.delete_document(document_id) -> int
 Retrieval.search(query, top_k=5) -> tuple[SearchHit]
 Retrieval.inspect() -> tuple[IndexEntry]
 Retrieval.reset() -> None
+Retrieval.runtime_info() -> {status, embedding, chroma}
+Retrieval.health() -> {status, embedding, chroma, tokenizer}
+Retrieval.close() -> None
 
 # C 自己定义需要的能力，由 G 适配实现。
 Evidence = {chunk_id, document_id, text, heading_path, score}
@@ -92,7 +100,7 @@ ChatSession.complete(prompt) -> str
 - 问答：G 查询许可 → F 创建配置快照会话 → C 通过注入接口检索、判定、生成 → A 补出处。使用最终 trace 的 rank 对应 chunk ID，所有步骤结束才释放查询许可。
 - 模型配置：G 路由直接调用 F；更换回答模型不重建向量。同一问题的判定与生成使用同一会话。
 
-多个查询共享许可，索引变更独占许可。状态转换用短锁，业务许可可以跨线程移交，不能持有实际线程锁跨线程。后台执行器为单线程；遇忙保持 PENDING，由手动 ready 重提，不阻塞等待 READY。客户端断开不能结束仍在运行的工作。停止接收任务后等待执行器完成再关闭资源。
+多个查询共享许可，索引变更独占许可。状态转换用短锁，业务许可可以跨线程移交，不能持有实际线程锁跨线程。后台执行器为单线程；遇忙保持 PENDING，由手动 ready 重提，不阻塞等待 READY。客户端断开不能结束仍在运行的工作。所有同步 HTTP 工作都在实际线程内登记；停机先停止接收工作，等待 HTTP 线程、索引执行器和许可全部结束，再关闭 B/A 资源，最后释放进程锁。
 
 模型失败不阻断资料浏览和配置。Chroma 失败时资料浏览/收录仍可用，新资料停在 PENDING。A 只处理自己的数据库异常；B 维护自身部分索引清理；G 根据公开结果决定跨模块恢复状态。
 
@@ -107,20 +115,34 @@ ChatSession.complete(prompt) -> str
 
 ## Issue 与 PR 检查点
 
-总 Issue #1 更新模块和用户故事；A #2、B #3、C #27 补真实子 Issue 关系并追加迁移设计。F、G、D 新建模块 Issue。E #33/PR #34 保持独立；#15 保留为 A 的历史增量。
+总 Issue [#1](https://github.com/vansye/EasyRAG/issues/1) 已更新模块和用户故事；A #2、B #3、C #27、D #37、E #33、F #35、G #36 均已挂为真实子 Issue。E 的 PR #34 保持独立；#15 保留为 A 的历史增量。
 
 每个模块 Issue 包含功能、数据原型、接口原型、所有权、失败语义、依赖、验收、PR 清单。每个功能一个 PR，关联模块 Issue；全部验收完成前使用 Refs 而非提前关闭整个模块。
 
-- [ ] 文档与模块 Issue：所有状态、数据、异常有明确负责人。
-- [ ] G 骨架：公开接口与 import 约束测试。
-- [ ] A 数据接管：真实 MySQL 验证空库/旧库、约束、ID 与事务。
-- [ ] A 资料与状态：迁移输入、CRUD、切片、状态与出处规则。
-- [ ] B 检索索引：保留算法，模块独立验证向量和失败清理。
-- [ ] F 回答模型：配置与 HTTP 分離、密钥/会话边界。
-- [ ] C 问答：检索/模型端口注入，保留三态回答与 trace。
-- [ ] G 收录索引、更新删除、问答引用：分别接线、测试、PR。
-- [ ] G 恢复与维护：竞态、异常退出、缺失/多余/过时索引验证。
-- [ ] D/E 回归：评估流程、前端构建及真实浏览器验收。
-- [ ] CI、启动文档、旧 Java 退出和切换备份。
+- [x] 文档与模块 Issue：所有状态、数据、异常有明确负责人。
+- [x] G 骨架：公开接口与 import 约束测试。
+- [x] A 数据接管：真实 MySQL 验证空库/旧库、约束、ID 与事务。
+- [x] A 资料与状态：迁移输入、CRUD、切片、状态与出处规则。
+- [x] B 检索索引：保留算法，模块独立验证向量和失败清理。
+- [x] F 回答模型：配置与 HTTP 分离、密钥/会话边界。
+- [x] C 问答：检索/模型端口注入，保留三态回答与 trace。
+- [x] G 收录索引、更新删除、问答引用：分别接线、测试、PR。
+- [x] G 恢复与维护：竞态、异常退出、缺失/多余/过时索引验证。
+- [x] D/E 回归：评估流程、前端构建及真实浏览器验收。
+- [x] CI、启动文档、旧 Java 退出和切换备份。
 
 每批最多编辑 3 个文件，报告文件、目的、受影响边界和验证结果。迁移 PR 顺序叠加在 #34 的代码之后，不自动合并。
+
+已发布的功能 PR：
+
+| 范围 | PR |
+|---|---|
+| 设计与依赖边界 | [#38](https://github.com/vansye/EasyRAG/pull/38)、[#39](https://github.com/vansye/EasyRAG/pull/39) |
+| A 输入、数据库接管、CRUD、恢复快照 | [#40](https://github.com/vansye/EasyRAG/pull/40)、[#42](https://github.com/vansye/EasyRAG/pull/42)、[#43](https://github.com/vansye/EasyRAG/pull/43)、[#49](https://github.com/vansye/EasyRAG/pull/49) |
+| B 独立模块与保留回归 | [#41](https://github.com/vansye/EasyRAG/pull/41)、[#48](https://github.com/vansye/EasyRAG/pull/48) |
+| F 配置与会话 / C 问答 / D 评估 | [#44](https://github.com/vansye/EasyRAG/pull/44)、[#46](https://github.com/vansye/EasyRAG/pull/46)、[#47](https://github.com/vansye/EasyRAG/pull/47) |
+| G 索引、变更、恢复、问答、HTTP | [#45](https://github.com/vansye/EasyRAG/pull/45)、[#50](https://github.com/vansye/EasyRAG/pull/50)、[#51](https://github.com/vansye/EasyRAG/pull/51)、[#52](https://github.com/vansye/EasyRAG/pull/52)、[#53](https://github.com/vansye/EasyRAG/pull/53) |
+| 真实索引恢复与维护全链路 | [#54](https://github.com/vansye/EasyRAG/pull/54)、[#55](https://github.com/vansye/EasyRAG/pull/55) |
+| 统一运行入口、CI、旧实现退出与本机切换 | [#56](https://github.com/vansye/EasyRAG/pull/56) |
+
+2026-09-15 已完成本机切换：新就绪审计拦截旧索引缺失，离线重建后 623 个切片 ID 全部保留，13 份原资料与真实浏览器流程验收通过。完整执行结果、配置归属和备份证据见 [切换与回退](fastapi-cutover.md)。所有 PR 保持待审查，未自动合并；URL 收录、检索改写和评估界面仍属后续规划。

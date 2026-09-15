@@ -1,5 +1,5 @@
 /**
- * API 类型定义：与 Spring Boot 的响应 record 一一对应（子 Issue E §五契约）。
+ * API 类型定义：与统一 FastAPI 的公开响应对应（子 Issue E §五契约）。
  * 后端是唯一权威——字段改名必须在后端 PR 里做，这里跟随。
  */
 

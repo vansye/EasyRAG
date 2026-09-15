@@ -1,6 +1,6 @@
 # 子 Issue F：回答模型配置与会话模块
 
-父 Issue：#1。当前设计：[FastAPI 模块迁移](fastapi-modules.md)。位置：`app/modules/answer_models`。
+Issue：[#35](https://github.com/vansye/EasyRAG/issues/35)，父 Issue：#1。当前设计：[FastAPI 模块迁移](fastapi-modules.md)。位置：`app/modules/answer_models`。
 
 ## 功能与用户故事
 
@@ -12,7 +12,7 @@
 
 ```python
 ConfigUpdate = {provider, model, base_url, api_key}  # api_key 只写
-PublicConfig = {provider, model, base_url, api_key_configured, source}
+PublicConfig = {configured, provider, model, base_url, api_key_configured, source}
 Models.get() -> PublicConfig
 Models.save(update: ConfigUpdate) -> PublicConfig
 Models.reset() -> PublicConfig
@@ -31,7 +31,9 @@ PublicConfig 不含密钥，ChatSession 封装 SDK、不暴露 SDK 对象或密�
 
 ## PR 与验收
 
-- [ ] 配置存取和 HTTP 解耦：保存、重读、恢复、非法地址、空密钥沿用、写失败原值保留。
-- [ ] 会话封装：每次 open_session 固定配置，同一会话调用期间修改配置不影响它；后续会话读取新值。
-- [ ] 使用隔离配置文件和假客户端运行全部测试，测试不得读写用户配置。
-- [ ] 模块 import 约束通过；现有网页配置契约不变。
+- [x] 配置存取和 HTTP 解耦：保存、重读、恢复、非法地址、空密钥沿用、写失败原值保留（PR #44）。
+- [x] 会话封装：每次 open_session 固定配置，同一会话调用期间修改配置不影响它；后续会话读取新值（PR #44、#52、#55）。
+- [x] 使用隔离配置文件和假客户端运行全部测试，测试不得读写用户配置。
+- [x] 模块 import 约束通过；现有网页配置契约不变（PR #53、#55）。
+
+模块实现见 [PR #44](https://github.com/vansye/EasyRAG/pull/44)，真实 HTTP 模型服务与配置切换验收见 [PR #55](https://github.com/vansye/EasyRAG/pull/55)。网页配置保持六个公开字段，密钥不回传；响应含禁止缓存头。

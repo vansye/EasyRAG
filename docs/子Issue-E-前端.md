@@ -2,6 +2,12 @@
 
 2026-09-14：采用用户确认的方案一，实现「资料库 / 知识问答」工作台及网页回答模型配置。对应前端子 Issue [#33](https://github.com/vansye/EasyRAG/issues/33)，归属总功能 Issue [#1](https://github.com/vansye/EasyRAG/issues/1)。
 
+## FastAPI 迁移兼容验收（2026-09-15）
+
+后端已统一为 FastAPI 8080，现有 Vue 外观、路由、交互和模型配置保持兼容，没有增加轮询。当前 HTTP 由 G 维护，回答模型配置由 F 维护，接口与启动方式见 [API 文档](api.md) 和 [前端 README](../frontend/README.md)。下文旧 Java 文件与 2026-09-14 测试数量作为当时的实施记录保留。
+
+[PR #56](https://github.com/vansye/EasyRAG/pull/56) 的 Vue 15 项测试与构建通过；真实浏览器完成 10 个验收步骤，包括模型保存/回读/恢复、上传与索引、问答引用、更新与重处理、删除后拒答。3 次实际模型请求均返回 200，原有 13 份资料与 623 个切片在浏览器验收前后哈希一致，临时资料已清理。完整切换证据见 [切换记录](fastapi-cutover.md)。
+
 ## 用户故事与验收
 
 - [x] U1：上传 Markdown/TXT 后可看到收录与处理状态，支持标题搜索、状态过滤和分页。
@@ -40,7 +46,7 @@ type ModelConfig = {
 type ModelConfigUpdate = Pick<ModelConfig, 'provider' | 'model' | 'base_url'> & { api_key?: string }
 ```
 
-前端只调用 Java REST API，负责交互、阅读排版和临时页面状态；不直连模型服务、Python 或数据库。Java 负责资料真相、变更编排和配置转发；Python 负责 RAG 计算与回答模型运行配置，不读取 MySQL。配置保存在被 Git 忽略的本机文件，恢复启动配置不修改 `.env`。资料与切片仍以 MySQL 为准。
+前端只调用 G 的统一 FastAPI REST API，负责交互、阅读排版和临时页面状态；不直连模型服务或数据库。A 维护 MySQL 资料真相，B 维护检索索引，C 维护问答流程，F 维护回答模型配置与会话，G 编排跨模块业务。配置保存在被 Git 忽略的本机文件，恢复启动配置不修改 `.env`。资料与切片仍以 MySQL 为准。
 
 本子 Issue 覆盖资料管理、问答与出处和模型配置；URL 抓取、评估看板 U8、会话历史、流式输出、嵌入模型切换不在本次交付范围。
 
