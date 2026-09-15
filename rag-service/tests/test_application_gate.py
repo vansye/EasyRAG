@@ -109,3 +109,29 @@ def test_ready_scan_failure_cannot_be_erased_by_a_new_workers_late_confirmation(
     gate.require_recovery()  # The scan fails after that worker acquired its lease.
     assert worker.confirm_completion()
     assert gate.state == State.RECOVERY_REQUIRED
+
+
+def test_shutdown_stops_all_admission_and_waits_for_disconnected_query_work():
+    gate = ready_gate()
+    query = gate.try_acquire(Operation.QUERY).lease
+    gate.stop()
+    for operation in Operation:
+        assert gate.try_acquire(operation).lease is None
+    with ThreadPoolExecutor(max_workers=1) as closer:
+        idle = closer.submit(gate.wait_idle)
+        try:
+            assert not idle.done()
+        finally:
+            query.close()
+        idle.result(timeout=2)
+    assert gate.state == State.RECOVERY_REQUIRED
+
+
+def test_shutdown_allows_an_existing_transferred_mutation_to_finish():
+    gate = ready_gate()
+    worker = gate.try_acquire(Operation.MUTATION).lease
+    gate.stop()
+    assert gate.owns(worker, Operation.MUTATION)
+    worker.confirm_completion()
+    gate.wait_idle()
+    assert gate.state == State.RECOVERY_REQUIRED

@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from enum import StrEnum
-from threading import Lock
+from threading import Condition, Lock
 
 
 class Operation(StrEnum):
@@ -28,10 +28,12 @@ class Admission:
 class Gate:
     def __init__(self):
         self._lock = Lock()
+        self._changed = Condition(self._lock)
         self._queries: set[Lease] = set()
         self._exclusive: Lease | None = None
         self._recovery_required = True
         self._generation = 0
+        self._stopping = False
 
     def _state(self):
         if self._exclusive is not None:
@@ -49,7 +51,7 @@ class Gate:
         operation = Operation(operation)
         with self._lock:
             state = self._state()
-            allowed = self._exclusive is None
+            allowed = self._exclusive is None and not self._stopping
             if operation != Operation.QUERY:
                 allowed = allowed and not self._queries
             if operation != Operation.RECOVERY:
@@ -73,8 +75,18 @@ class Gate:
             self._recovery_required = True
             self._generation += 1
 
-    def _finish(self, lease: 'Lease', confirmed: bool) -> bool:
+    def stop(self):
         with self._lock:
+            self._stopping = True
+            self._recovery_required = True
+            self._generation += 1
+
+    def wait_idle(self):
+        with self._changed:
+            self._changed.wait_for(lambda: not self._queries and self._exclusive is None)
+
+    def _finish(self, lease: 'Lease', confirmed: bool) -> bool:
+        with self._changed:
             if lease.operation == Operation.QUERY:
                 if lease not in self._queries:
                     return False
@@ -84,6 +96,7 @@ class Gate:
                     return False
                 self._exclusive = None
                 self._recovery_required = not confirmed or lease._generation != self._generation
+            self._changed.notify_all()
             return True
 
 
