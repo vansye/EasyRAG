@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 
 import { useQuestionStore } from '@/features/qa/store'
 import type { ChunkRow, DocumentDetail } from '@/shared/api/types'
@@ -12,6 +13,7 @@ import '@/styles/drawer.css'
 
 const props = defineProps<{ documentId: number | null; chunkId: number | null }>()
 const emit = defineEmits<{ close: [] }>()
+const router = useRouter()
 const gate = useGateStore()
 const library = useDocumentStore()
 const qa = useQuestionStore()
@@ -32,6 +34,11 @@ let returnFocus: HTMLElement | null = null
 const dirty = computed(() => editing.value && draft.value !== detail.value?.content)
 const canMutate = computed(() => gate.connected && gate.runtime?.rag_available === true && gate.runtime.state === 'READY' && !qa.loading && !busy.value)
 const missingHighlight = computed(() => props.chunkId && detail.value && !loading.value && !chunks.value.some((chunk) => chunk.id === props.chunkId))
+const stopNavigationGuard = router.beforeEach((to, from) => {
+  if (!props.documentId || (to.query.document === from.query.document && to.query.chunk === from.query.chunk)) return
+  if (busy.value) return false
+  if (dirty.value) return window.confirm('正文还没有保存，确定放弃修改吗？')
+})
 
 async function load(quiet = false) {
   const id = props.documentId
@@ -45,7 +52,9 @@ async function load(quiet = false) {
     detail.value = document
     chunks.value = result.items
     if (!editing.value) draft.value = document.content
+    loading.value = false
     await nextTick()
+    if (requestVersion !== version) return
     if (!quiet && props.chunkId) documentElementForChunk(props.chunkId)?.scrollIntoView({ block: 'center' })
     if (['PENDING', 'INDEXING'].includes(document.index_status)) timer = setTimeout(() => void load(true), 2000)
   } catch (failure) {
@@ -77,7 +86,6 @@ async function startEditing() {
 
 function requestClose() {
   if (busy.value) return
-  if (dirty.value && !window.confirm('正文还没有保存，确定放弃修改吗？')) return
   emit('close')
 }
 
@@ -108,10 +116,11 @@ async function remove() {
     qa.markSourceChanged(props.documentId)
     gate.notice = `「${detail.value.title}」已删除，后续回答不再使用这份资料。`
     library.allTotal = Math.max(0, library.allTotal - 1)
-    emit('close')
     await library.load(true)
     if (library.page >= library.pages) { library.page = library.pages - 1; await library.load(true) }
     await gate.refresh()
+    busy.value = false
+    emit('close')
   } catch (failure) {
     gate.raise(failure)
     error.value = failure instanceof Error ? failure.message : '删除失败，请重试。'
@@ -156,6 +165,7 @@ watch(() => [props.documentId, props.chunkId], async () => {
 }, { immediate: true })
 
 onUnmounted(() => {
+  stopNavigationGuard()
   ++version
   clearTimeout(timer)
   document.body.classList.remove('dialog-open')
