@@ -31,6 +31,32 @@ jobs:
       - name: 类型检查与生产构建
         run: npm run build
 
+      - name: 安装布局回归浏览器
+        run: npx playwright install --with-deps chromium
+
+      - name: 出处与历史布局回归
+        env:
+          EASYRAG_PREVIEW_URL: http://127.0.0.1:4173
+        run: |
+          node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 4173 --strictPort > /tmp/easyrag-preview.log 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid"' EXIT
+          for attempt in {1..50}; do
+            if curl --silent --fail "$EASYRAG_PREVIEW_URL/" > /dev/null; then break; fi
+            sleep 0.2
+          done
+          npm run test:browser:layout
+
+      - name: 保存前端构建与布局验收证据
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: frontend-build-and-layout
+          include-hidden-files: true
+          path: |
+            frontend/dist
+            frontend/.verification/question-layout
+
   backend:
     name: 统一后端（FastAPI）
     runs-on: ubuntu-latest
