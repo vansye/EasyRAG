@@ -325,3 +325,33 @@ def test_final_rebuild_audit_rejects_equal_counts_with_wrong_metadata(services, 
         assert chunk_ids(a) == original_ids
         ready = readiness.ready()
         assert ready.state == State.READY and ready.recovered == 0
+
+
+@pytest.mark.parametrize('body', [
+    'A plain note without headings.\n',
+    '# ' + 'A' * 600 + '\nBody.\n',
+    'start\n' + ' ' * 70000 + '\nend',
+    'start' + ' ' * 70000,
+    ' ' * 70000 + 'end',
+    '开始\n' + '\u3000' * 23000 + '\n结束',
+], ids=['plain', 'long-heading', 'middle-space', 'trailing-space', 'leading-space', 'unicode-space'])
+def test_adversarial_chunk_drafts_persist_and_rebuild_without_losing_source(services, body):
+    a, b = services.a, services.b
+    with readiness_for(a, b) as (readiness, gate):
+        assert readiness.ready().state == State.READY
+        document = a.create('storage-contract.md', body.encode('utf-8'))
+        result = Indexer(a, b, gate).run(document.id)
+        assert result.outcome == 'INDEXED', result
+        assert a.get(document.id).content == body
+        snapshots = a.snapshots()
+        assert snapshots[0].chunks_valid
+        verify_consistency(snapshots, b.inspect())
+        original_ids = chunk_ids(a)
+        original_source = source_truth(a)
+
+        rebuilt = rebuild_index(a, b)
+        assert rebuilt.reused_chunks == rebuilt.chunks == len(original_ids[document.id])
+        assert chunk_ids(a) == original_ids
+        assert source_truth(a) == original_source
+        verify_consistency(a.snapshots(), b.inspect())
+        assert readiness.ready().state == State.READY

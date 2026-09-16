@@ -35,6 +35,14 @@ begin_rebuild(id, chunk_drafts, *, expected_content) -> tuple[Chunk]
 
 实现 PR：[输入 #40](https://github.com/vansye/EasyRAG/pull/40)、[接管 #42](https://github.com/vansye/EasyRAG/pull/42)、[CRUD #43](https://github.com/vansye/EasyRAG/pull/43)、[恢复 #49](https://github.com/vansye/EasyRAG/pull/49)。本次接管本机数据的实际结果另见 [切换记录](fastapi-cutover.md)，不以隔离测试代替实际迁移结果。
 
+### 当前切片持久化契约（2026-09-15 修订）
+
+A 保存完整的 `document.content`。切片按 `seq=0..n-1` 排序，UTF-8 字节区间必须有序、非空且不重叠；每个 `text` 必须逐字节对应原文。首部、切片之间和尾部允许留出纯空白间隙，所有非空白字符必须被覆盖。空白采用与 B 相同的 Unicode 语义，包括 NBSP、NEL 和全角空格；纯空白切片仍拒绝入库。
+
+存储上限保持 `text <= 65,535` 个 UTF-8 字节、`heading_path <= 512` 个 Unicode 码点。A 不替上游截断或过滤；B 在产出时满足这两项规格，并将标题路径元数据限制为前 512 个码点，完整标题仍保留在原文中。正文、偏移、重建复用和出处查询使用同一份原文。公开格式见 [API 的资料与切片约定](api.md#资料与切片)。
+
+本节取代下方历史契约中“切片连续覆盖每个原文字节”的要求。合法的纯空白间隙可通过恢复核验；缺失非空白内容、重叠、错误 UTF-8 边界、正文不匹配仍然拒绝。跨模块约定由 `test_chunk_storage_contract.py` 与真实 MySQL 索引/重建回归共同验证，A/B 的生产代码继续互不 import。
+
 ## 历史实现与契约：Spring Boot 阶段
 
 > 父 Issue：#1 总功能文档

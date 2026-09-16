@@ -1,10 +1,13 @@
-"""标题感知切片；正文保持原样，定位显式采用 UTF-8 字节偏移。"""
+"""标题感知切片；正文片段保持原样，只跳过纯空白片段，以 UTF-8 字节定位。"""
 
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import lru_cache
 
+
+_MAX_CHUNK_BYTES = 65535
+_MAX_HEADING_CODE_POINTS = 512
 
 _HEADING = re.compile(r"^ {0,3}(#{1,3})(?:[ \t]+(.*?))?[ \t]*$")
 _FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
@@ -35,7 +38,7 @@ class _Span:
 
     @property
     def heading_path(self) -> str:
-        return " > ".join(title for title in self.headings if title)
+        return " > ".join(title for title in self.headings if title)[:_MAX_HEADING_CODE_POINTS]
 
 
 def _structure(text: str) -> tuple[list[_Span], list[int], list[int]]:
@@ -109,14 +112,24 @@ def split_markdown(
     if not text.strip():
         return []
 
+    byte_offsets = [0]
+    for character in text:
+        byte_offsets.append(byte_offsets[-1] + len(character.encode("utf-8")))
+
     @lru_cache(maxsize=None)
     def measure(span: _Span) -> int:
         return count_tokens(_embedding_text(text[span.start:span.end], span.heading_path))
 
+    def fits(span: _Span) -> bool:
+        return (byte_offsets[span.end] - byte_offsets[span.start] <= _MAX_CHUNK_BYTES
+                and measure(span) <= max_tokens)
+
     sections, paragraph_ends, sentence_ends = _structure(text)
 
     def subdivide(span: _Span) -> list[_Span]:
-        if measure(span) <= max_tokens:
+        if not text[span.start:span.end].strip():
+            return []
+        if fits(span):
             return [span]
         if span.end - span.start <= 1:
             raise ValueError("max_tokens cannot fit text plus heading_path and special tokens")
@@ -137,14 +150,11 @@ def split_markdown(
     for span in pieces:
         if merged and (measure(merged[-1]) < min_tokens or measure(span) < min_tokens):
             candidate = _Span(merged[-1].start, span.end, _common_headings(merged[-1], span))
-            if measure(candidate) <= max_tokens:
+            if fits(candidate):
                 merged[-1] = candidate
                 continue
         merged.append(span)
 
-    byte_offsets = [0]
-    for character in text:
-        byte_offsets.append(byte_offsets[-1] + len(character.encode("utf-8")))
     return [
         Chunk(
             text=text[span.start:span.end],
