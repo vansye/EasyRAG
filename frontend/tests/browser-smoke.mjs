@@ -39,9 +39,14 @@ const source = (id, documentId, text) => ({ chunk_id: id, document_id: documentI
 const answer = {
   answer: 'RDB 会在指定时间保存数据快照，恢复时使用最近的一份快照 [1]。\n\n事务的原子性则保证一组操作全部完成，或者全部不发生 [2]。',
   status: 'ANSWERED',
+  history_id: 1, created_at: '2026-09-15T12:00:00',
+  model: { provider: 'openai', model: 'browser-test-model' }, elapsed_ms: 1800,
   sources: [source(2, 2, '事务的原子性保证全部执行或全部回滚。'), source(9, 1, 'RDB 会在指定时间间隔生成数据集的快照。')],
   trace: [{ round_index: 1, query: 'RDB 快照和事务原子性分别是什么？', decision: 'SUFFICIENT', retrieved: [{ chunk_id: 9, document_id: 1, rank: 1, score: 0.1 }, { chunk_id: 2, document_id: 2, rank: 2, score: 0.2 }] }],
 }
+
+const questionHistory = []
+let nextQuestionId = 1
 
 await page.route('**/health', (route) => route.fulfill({ json: { status: 'UP', service: 'easyrag-server', db: { status: 'UP', database: 'mysql' } } }))
 await page.route(/\/api\//, async (route) => {
@@ -59,7 +64,27 @@ await page.route(/\/api\//, async (route) => {
     }
     const refused = receivedQuestion.includes('缺少资料')
     const partial = receivedQuestion.includes('部分')
-    return route.fulfill({ json: refused ? { ...answer, answer: '知识库中没有找到能回答这个问题的内容。', status: 'REFUSED', sources: [], trace: [{ ...answer.trace[0], decision: 'NONE' }] } : partial ? { ...answer, status: 'PARTIAL', trace: [{ ...answer.trace[0], decision: 'PARTIAL' }] } : answer })
+    const response = { ...(refused ? { ...answer, answer: '知识库中没有找到能回答这个问题的内容。', status: 'REFUSED', sources: [], trace: [{ ...answer.trace[0], decision: 'NONE' }] } : partial ? { ...answer, status: 'PARTIAL', trace: [{ ...answer.trace[0], decision: 'PARTIAL' }] } : answer), history_id: nextQuestionId++ }
+    const { history_id, ...detail } = structuredClone(response)
+    questionHistory.unshift({ ...detail, id: history_id, question: receivedQuestion })
+    return route.fulfill({ json: response })
+  }
+  if (path === '/api/question-history') {
+    const pageIndex = Number(url.searchParams.get('page'))
+    const size = Number(url.searchParams.get('size'))
+    const items = questionHistory.slice(pageIndex * size, (pageIndex + 1) * size)
+      .map(({ id, question, status, created_at, model, elapsed_ms }) => ({ id, question, status, created_at, model, elapsed_ms }))
+    return route.fulfill({ json: { total: questionHistory.length, items } })
+  }
+  const historyMatch = path.match(/^\/api\/question-history\/(\d+)$/)
+  if (historyMatch) {
+    const record = questionHistory.find(item => item.id === Number(historyMatch[1]))
+    if (!record) return route.fulfill({ status: 404, json: { error: '历史记录不存在或已删除' } })
+    if (request.method() === 'DELETE') {
+      questionHistory.splice(questionHistory.indexOf(record), 1)
+      return route.fulfill({ status: 204 })
+    }
+    return route.fulfill({ json: record })
   }
   if (path === '/api/documents' && request.method() === 'GET') {
     documentListCalls++

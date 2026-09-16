@@ -37,6 +37,7 @@ def workspace(tmp_path, monkeypatch):
     a.health.return_value = {'status': 'UP'}
     a.snapshots.return_value = ()
     a.pending_ids.return_value = ()
+    a.save_history = Mock(return_value=SimpleNamespace(id=41, created_at=now))
     a.update.return_value = UpdateResult(replace(document, index_status='PENDING'), True)
 
     def create(filename, data):
@@ -233,6 +234,7 @@ def test_question_uses_trace_rank_sources_and_keeps_technical_errors_distinct(wo
     w.a.sources.return_value = (Source(11, 7, 'Second', 'Second', 0, 6, ''),
                                 Source(30, 3, 'First', 'First', 0, 5, ''))
     session = Mock()
+    session.model_info = {'provider': 'openai', 'model': 'question-model'}
     session.complete.side_effect = ['{"verdict":"SUFFICIENT"}', 'First [1], second [2].']
     monkeypatch.setattr(w.models, 'open_session', Mock(return_value=session))
     response = w.client.post('/api/questions', json={'question': 'What?'})
@@ -240,6 +242,11 @@ def test_question_uses_trace_rank_sources_and_keeps_technical_errors_distinct(wo
     assert response.json()['status'] == 'ANSWERED'
     assert [source['chunk_id'] for source in response.json()['sources']] == [30, 11]
     assert response.json()['trace'][-1]['retrieved'][0]['rank'] == 1
+    assert response.json()['history_id'] == 41
+    assert response.json()['created_at'] == '2026-09-15T12:30:00'
+    assert response.json()['model'] == {'provider': 'openai', 'model': 'question-model'}
+    assert isinstance(response.json()['elapsed_ms'], int)
+    w.a.save_history.assert_called_once()
     w.models.open_session.assert_called_once_with()
     session.complete.side_effect = RuntimeError('upstream-secret')
     response = w.client.post('/api/questions', json={'question': 'What?'})
@@ -284,3 +291,13 @@ def test_unexpected_configuration_failure_is_sanitized_and_never_cached(workspac
 @pytest.mark.parametrize('path', ['/chunk', '/embed', '/query', '/reset', '/index/reset', '/runtime', '/model-config'])
 def test_internal_legacy_endpoints_are_not_exposed(workspace, path):
     assert workspace.client.post(path).status_code == 404
+
+
+@pytest.mark.parametrize('page,size', [(-1,20),(0,0),(0,101)])
+def test_history_invalid_pagination_is_rejected_before_database_access(workspace,page,size):
+    w = workspace
+    w.a._transaction.side_effect = DatabaseUnavailable('database unavailable')
+    w.a.list_history.side_effect = lambda **params: Knowledge.list_history(w.a, **params)
+    response = w.client.get('/api/question-history', params={'page': page, 'size': size})
+    assert response.status_code == 400 and set(response.json()) == {'error'}
+    w.a._transaction.assert_not_called()

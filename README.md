@@ -1,10 +1,10 @@
 # EasyRAG
 
-个人知识库问答系统：收录 Markdown / TXT，管理和编辑资料，基于知识库回答并展示出处与检索过程。资料更新、重索引或删除后，问答使用当前内容；依据不足时明确拒答。Vue 工作台支持在网页配置 OpenAI 兼容接口、DeepSeek 或本地 Ollama 回答模型。
+个人知识库问答系统：收录 Markdown / TXT，管理和编辑资料，基于知识库回答并展示出处与检索过程。资料更新、重索引或删除后，问答使用当前内容；依据不足时明确拒答。Vue 工作台支持在网页配置 OpenAI 兼容接口、DeepSeek 或本地 Ollama 回答模型。问答历史保存在服务端，可查看、删除和重新提问；历史出处保留回答时的原文。
 
 ## 架构
 
-后端统一为一个 FastAPI 进程（8080），前端保持 Vue 3 + TypeScript + Pinia + Vite（5173）。MySQL 8 保存资料与切片，Chroma 保存可重建的派生向量。无需 Java 或独立的内部 RAG HTTP 服务。
+后端统一为一个 FastAPI 进程（8080），前端保持 Vue 3 + TypeScript + Pinia + Vite（5173）。MySQL 8 保存资料、切片与问答历史，Chroma 保存可重建的派生向量。无需 Java 或独立的内部 RAG HTTP 服务。
 
 ```mermaid
 flowchart LR
@@ -24,7 +24,8 @@ flowchart LR
 A/B/C/F 互不引用。G 只调用各模块的 `public.py`，通过注入接口组合问答和索引流程。各模块独立维护类型、异常、数据与测试；模块边界由 AST 测试检查。
 
 - 收录：A 保存 PENDING → 单线程任务调用 B 切片 → A 保存切片及 ID → B 建索引 → A 确认 INDEXED。
-- 问答：查询许可 → F 固定一个模型会话 → C 通过注入端口检索、判定、生成 → A 补全出处，按最终检索 rank 展示。
+- 问答：查询许可 → F 固定一个模型会话 → C 通过注入端口检索、判定、生成 → A 补全出处，按最终检索 rank 排列并保存回答与来源快照 → 返回成功。
+- 历史：G 直接调用 A 查询或删除独立记录；不调用检索和回答模型，不把历史答案加入索引或后续提问上下文。
 - 更新/删除：变更许可覆盖撤旧向量和数据库变更，直到异步索引终态；无法确认一致时关闭问答，要求显式恢复。
 
 完整边界、设计取舍与迁移记录见 [模块设计](docs/fastapi-modules.md)、[架构设计](docs/架构设计.md)。基线仍为向量检索和一次检索后的三态判定；BM25、查询改写重查、URL 抓取属于后续范围。
@@ -36,7 +37,7 @@ frontend/                       Vue 资料库 / 知识问答工作台
 rag-service/app/http.py          HTTP 参数、响应与错误适配
 rag-service/app/application/     装配、业务编排、运行门禁、单执行器、恢复
 rag-service/app/modules/
-  knowledge/                    MySQL、迁移、正文/哈希、切片与资料状态
+  knowledge/                    MySQL、迁移、正文/哈希、切片、资料状态与问答历史
   retrieval/                    切片、tokenizer、embedding、Chroma
   qa/                           判定、生成、拒答、trace，注入检索和模型端口
   answer_models/                配置、凭据、厂商 SDK、单问题会话
@@ -74,7 +75,7 @@ Copy-Item .env.example .env
 .\.venv\Scripts\python.exe -m app.maintenance init-db
 ```
 
-已有 Java/Flyway V2 数据库使用 `adopt-legacy-db`，不要对旧库运行初始化或删除表。该命令校验历史校验和、字段、索引及外键后登记 Alembic 基线，见 [切换与回退](docs/fastapi-cutover.md)。
+已有 Java/Flyway V2 数据库先使用 `adopt-legacy-db`，不要对旧库运行初始化或删除表。该命令校验历史校验和、字段、索引及外键后只登记 `0001_legacy_v2` 基线；随后须在停止后端时运行 `upgrade-db`。已经使用该 Alembic 基线的数据库直接运行 `upgrade-db`，增加独立的问答历史表并保留现存资料。当前版本为 `0002_question_history`；启动服务不会自动升级，未升级时数据库健康检查为 DOWN。空库 `init-db` 直接建立当前版本。旧版切换流程见 [切换与回退](docs/fastapi-cutover.md)，历史功能还需执行上述新增升级步骤。
 
 准备默认检索模型与固定版本的 tokenizer：
 
@@ -103,12 +104,22 @@ npm run dev -- --host 127.0.0.1 --port 5173
 
 每个问题固定一个会话；配置修改从下一次问题生效，切换回答模型不重建向量。「恢复启动配置」移除本机覆盖文件，重新读取环境变量 / `.env`。启动配置使用 `LLM_PROVIDER`、`LLM_MODEL`、`LLM_BASE_URL`、`LLM_API_KEY`、`LLM_TIMEOUT_SECONDS`，示例见 [.env.example](rag-service/.env.example)。
 
+## 问答历史
+
+知识问答页可分页查看历史、打开保存的回答与来源全文、删除单条记录或重新提问。每次完成的回答、部分回答和拒答都保存一条记录，包含原问题、正文、状态、时间、实际模型、耗时和检索过程；重新提问使用当前资料与模型，生成另一条记录。
+
+资料更新、重索引或删除不改变已保存的来源快照，删除历史也不改变资料或向量。检索或模型不可用时，只要数据库可用仍能查询和删除历史。问答必须先确认历史保存成功才返回成功；保存失败返回错误，不会在浏览器伪造记录或自动再次调用模型。
+
 ## 维护与故障恢复
 
 停止后端后，在同一目录、同一配置下执行：
 
 ```powershell
+# 仅尚未接管的 Java/Flyway V2 数据库执行：
 .\.venv\Scripts\python.exe -m app.maintenance adopt-legacy-db
+# 已接管数据库升级到当前版本：
+.\.venv\Scripts\python.exe -m app.maintenance upgrade-db
+# 需要恢复派生索引时执行：
 .\.venv\Scripts\python.exe -m app.maintenance rebuild-index
 ```
 
@@ -125,7 +136,7 @@ cd rag-service
 .\.venv\Scripts\python.exe -m pytest tests/mysql_schema_integration.py tests/mysql_knowledge_integration.py tests/mysql_recovery_integration.py tests/mysql_rebuild_integration.py tests/mysql_http_integration.py -q
 ```
 
-集成测试只创建并删除 `easyrag_fastapi_it_<随机UUID>`，不选择业务数据库；使用临时 Chroma、tokenizer 和本地 HTTP 模型服务，不需要真实模型或付费请求。数据库初始化、旧库接管、事务、UTF-8 偏移、索引恢复、HTTP 与维护子进程均有覆盖。CI 在 Linux 上运行同一批测试，并保留 Vue 测试与构建。
+集成测试只创建并删除 `easyrag_fastapi_it_<随机UUID>`，不选择业务数据库；使用临时 Chroma、tokenizer 和本地 HTTP 模型服务，不需要真实模型或付费请求。数据库初始化、旧库接管与升级、事务、UTF-8 偏移、历史快照、索引恢复、HTTP 与维护子进程均有覆盖。CI 在 Linux 上运行同一批测试，并保留 Vue 测试与构建。
 
 ```powershell
 cd frontend
@@ -133,8 +144,10 @@ npm test
 npm run build
 npm run test:browser
 npm run test:browser:models
+# 独立启动 Vite 与无头 Chrome，验证编辑/门禁回归及问答历史：
+node tests/browser-regressions.mjs
 ```
 
-浏览器测试需要前端预览服务和本机 Chrome。`node tests/browser-live.mjs` 会调用当前真实模型，只创建并清理自己命名的临时资料；详见前端 README。
+原有浏览器测试需要前端预览服务和本机 Chrome；`browser-regressions.mjs` 自行启动隔离的 Vite 服务，使用接口样例验证交互，不调用真实模型。`node tests/browser-live.mjs` 会调用当前真实模型，并清理自己命名的临时资料；这些测试问答仍按产品规则保存在历史中，可在历史列表删除。详见前端 README。
 
 离线评估入口：`python scripts/eval_retrieval.py --help`。黄金集和既有基线见 [评估基线](docs/eval/retrieval-baseline-v1.md)。本次架构迁移未改检索算法，未重新宣称新的检索指标。

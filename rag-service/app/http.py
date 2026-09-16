@@ -15,7 +15,7 @@ from starlette.exceptions import HTTPException
 from starlette.formparsers import MultiPartException
 
 from app.modules.answer_models.public import ConfigRejected, ModelUnavailable
-from app.modules.knowledge.public import DatabaseUnavailable, DocumentNotFound, InputRejected
+from app.modules.knowledge.public import DatabaseUnavailable, DocumentNotFound, HistoryNotFound, InputRejected
 
 from .application.errors import GateBusy, MutationFailed, QuestionFailed, RecoveryFailed
 from .application.gate import State
@@ -50,6 +50,7 @@ def _integer_parser(bits, default=None):
 _Page = Annotated[int, _integer_parser(32, 0)]
 _PageSize = Annotated[int, _integer_parser(32, 20)]
 _DocumentId = Annotated[int, _integer_parser(64)]
+_HistoryId = Annotated[int, _integer_parser(64)]
 
 
 class _ApiBoundary:
@@ -150,6 +151,10 @@ def create_app(services: Services | None = None, *, settings: RuntimeSettings | 
     @app.exception_handler(DocumentNotFound)
     async def missing(_request, _failure):
         return JSONResponse({'error': '文档不存在或已删除'}, status_code=404)
+
+    @app.exception_handler(HistoryNotFound)
+    async def missing_history(_request, _failure):
+        return JSONResponse({'error': '问答历史不存在或已删除'}, status_code=404)
 
     @app.exception_handler(DatabaseUnavailable)
     async def database_unavailable(_request, _failure):
@@ -256,6 +261,22 @@ def create_app(services: Services | None = None, *, settings: RuntimeSettings | 
             return _services(request).questions.ask(body.question)
         except ValueError:
             raise InputRejected(_INVALID_QUESTION) from None
+
+    @app.get('/api/question-history')
+    @_worker
+    def question_history(request: Request, page: _Page = 0, size: _PageSize = 20):
+        return _services(request).knowledge.list_history(page=page, size=size)
+
+    @app.get('/api/question-history/{history_id}')
+    @_worker
+    def history_detail(request: Request, history_id: _HistoryId):
+        return _services(request).knowledge.get_history(history_id)
+
+    @app.delete('/api/question-history/{history_id}', status_code=204)
+    @_worker
+    def delete_history(request: Request, history_id: _HistoryId):
+        _services(request).knowledge.delete_history(history_id)
+        return Response(status_code=204)
 
     @app.get('/api/model-config')
     @_worker

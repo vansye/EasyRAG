@@ -14,7 +14,8 @@ from ._schema import verify_schema
 from ._types import DatabaseUnavailable, SchemaMismatch
 
 
-REVISION = '0001_legacy_v2'
+BASELINE_REVISION = '0001_legacy_v2'
+REVISION = '0002_question_history'
 LEGACY_HISTORY = (
     ('1', 'SQL', 'V1__init.sql', 143109904, 1),
     ('2', 'SQL', 'V2__fix_updated_at_and_unique_seq.sql', -2014110456, 1),
@@ -60,7 +61,7 @@ class Database:
     def require_schema(self, connection):
         if not self._schema_verified:
             if self._revision(connection) != REVISION:
-                raise SchemaMismatch('database has not been initialized or adopted')
+                raise SchemaMismatch('database requires initialization, adoption, or an explicit upgrade')
             verify_schema(connection)
             self._schema_verified = True
 
@@ -69,15 +70,18 @@ class Database:
         if 'alembic_version' not in inspect(connection).get_table_names():
             return None
         rows = tuple(connection.execute(text('SELECT version_num FROM alembic_version')).scalars())
-        if rows != (REVISION,):
+        if len(rows) != 1 or rows[0] not in (BASELINE_REVISION, REVISION):
             raise SchemaMismatch('unknown or incomplete Alembic revision')
-        return REVISION
+        return rows[0]
 
     def initialize(self):
         with self.transaction() as connection:
-            if self._revision(connection) == REVISION:
+            revision = self._revision(connection)
+            if revision == REVISION:
                 verify_schema(connection)
                 return
+            if revision == BASELINE_REVISION:
+                raise SchemaMismatch('database requires an explicit upgrade-db')
             if inspect(connection).get_table_names():
                 raise SchemaMismatch('database is not empty; use adopt-legacy-db after verification')
             command.upgrade(self._alembic(connection), REVISION)
@@ -93,15 +97,25 @@ class Database:
                 FROM flyway_schema_history ORDER BY installed_rank''')))
             if rows != LEGACY_HISTORY:
                 raise SchemaMismatch('Flyway V1/V2 history or checksums do not match')
-            verify_schema(connection)
-            if self._revision(connection) != REVISION:
-                command.stamp(self._alembic(connection), REVISION)
+            verify_schema(connection, include_history=False)
+            if self._revision(connection) is None:
+                command.stamp(self._alembic(connection), BASELINE_REVISION)
+
+    def upgrade(self):
+        with self.transaction() as connection:
+            revision = self._revision(connection)
+            if revision is None:
+                raise SchemaMismatch('database must be initialized or adopted before upgrade-db')
+            verify_schema(connection, include_history=revision == REVISION)
+            if revision != REVISION:
+                command.upgrade(self._alembic(connection), REVISION)
+                verify_schema(connection)
 
     def health(self):
         try:
             with self.transaction() as connection:
                 if self._revision(connection) != REVISION:
-                    raise SchemaMismatch('database has not been initialized or adopted')
+                    raise SchemaMismatch('database requires initialization, adoption, or an explicit upgrade')
                 verify_schema(connection)
         except DatabaseUnavailable as failure:
             self._schema_verified = False

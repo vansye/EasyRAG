@@ -1,5 +1,7 @@
 """One frozen model session per question; citation ranks resolve to MySQL sources."""
 
+from dataclasses import asdict
+from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -20,6 +22,8 @@ def workflow():
     gate.try_acquire(Operation.RECOVERY).lease.confirm_completion()
     a,b,models=Mock(spec=Knowledge),Mock(spec=Retrieval),Mock(spec=Models)
     session=Mock()
+    session.model_info={'provider':'openai','model':'frozen-model'}
+    a.save_history=Mock(return_value=SimpleNamespace(id=41,created_at=datetime(2026,9,15,12,30)))
     session.complete.side_effect=['{"verdict":"SUFFICIENT"}','First [1], second [2].']
     models.open_session.return_value=session
     b.search.return_value=(SearchHit(30,3,'First','',0.9),SearchHit(10,1,'Second','',0.8))
@@ -38,6 +42,14 @@ def test_one_session_and_trace_rank_resolve_to_the_correct_source(workflow):
     w.a.sources.assert_called_once_with((10,30))
     assert [source.chunk_id for source in result.sources] == [30,10]
     assert result.trace[-1].retrieved[0].chunk_id == result.sources[0].chunk_id
+    assert result.history_id == 41 and result.created_at == datetime(2026,9,15,12,30)
+    assert result.model == {'provider':'openai','model':'frozen-model'}
+    saved=w.a.save_history.call_args.args[0]
+    assert saved.question == 'Question?' and saved.answer == result.answer and saved.status == result.status
+    assert saved.sources == result.sources and saved.trace == tuple(asdict(entry) for entry in result.trace)
+    assert saved.model == result.model and saved.elapsed_ms == result.elapsed_ms >= 0
+    w.a.save_history.assert_called_once()
+    w.models.get.assert_not_called()
     assert w.gate.state == State.READY
 
 
@@ -48,6 +60,8 @@ def test_refusal_has_trace_but_does_not_read_sources_or_generate(workflow):
     assert result.status == 'REFUSED' and result.sources == ()
     assert w.session.complete.call_count == 1
     w.a.sources.assert_not_called()
+    assert w.a.save_history.call_args.args[0].status == 'REFUSED'
+    assert w.a.save_history.call_args.args[0].sources == ()
     assert w.gate.state == State.READY
 
 
@@ -59,20 +73,25 @@ def test_invalid_input_and_busy_gate_do_not_create_sessions(workflow):
         with pytest.raises(GateBusy):
             w.questions.ask('Question?')
     w.models.open_session.assert_not_called()
+    w.a.save_history.assert_not_called()
 
 
-@pytest.mark.parametrize('stage', ['session','judge','source'])
+@pytest.mark.parametrize('stage', ['session','judge','source','history'])
 def test_technical_failure_does_not_turn_into_refusal_or_leak_details(workflow,stage):
     w=workflow
     if stage == 'session':
         w.models.open_session.side_effect=ModelUnavailable()
     elif stage == 'judge':
         w.session.complete.side_effect=RuntimeError('private provider body')
-    else:
+    elif stage == 'source':
         w.a.sources.side_effect=DatabaseUnavailable('private SQL body')
+    else:
+        w.a.save_history.side_effect=DatabaseUnavailable('private history SQL body')
     with pytest.raises(QuestionFailed) as failure:
         w.questions.ask('Question?')
     assert 'private' not in str(failure.value) and w.gate.state == State.READY
+    assert w.a.save_history.call_count == (1 if stage == 'history' else 0)
+    assert w.models.open_session.call_count == 1
 
 
 def test_missing_source_closes_query_admission_for_recovery(workflow):
@@ -81,6 +100,7 @@ def test_missing_source_closes_query_admission_for_recovery(workflow):
     with pytest.raises(RecoveryFailed):
         w.questions.ask('Question?')
     assert w.gate.state == State.RECOVERY_REQUIRED
+    w.a.save_history.assert_not_called()
 
 
 def test_source_resolution_uses_final_trace_instead_of_an_earlier_round(workflow):
@@ -92,3 +112,21 @@ def test_source_resolution_uses_final_trace_instead_of_an_earlier_round(workflow
     ))
     result=Questions(w.a,w.b,w.models,w.gate,qa=engine).ask('Question?')
     assert [source.chunk_id for source in result.sources] == [30,10]
+
+
+def test_partial_answer_saves_coverage_and_original_question(workflow):
+    w=workflow
+    w.session.complete.side_effect=['{"verdict":"PARTIAL"}','Only the first part is covered [1].']
+    result=w.questions.ask('  Original question?  ')
+    saved=w.a.save_history.call_args.args[0]
+    assert result.status == saved.status == 'PARTIAL'
+    assert saved.question == '  Original question?  '
+    assert saved.trace[-1]['decision'] == 'PARTIAL'
+
+
+def test_elapsed_time_covers_model_and_sources_before_history_write(workflow,monkeypatch):
+    timer=Mock(side_effect=[20.0,21.75])
+    monkeypatch.setattr('app.application.questions.perf_counter',timer)
+    result=workflow.questions.ask('Question?')
+    assert result.elapsed_ms == workflow.a.save_history.call_args.args[0].elapsed_ms == 1750
+    assert timer.call_count == 2

@@ -27,7 +27,7 @@ def chat_server(monkeypatch):
         monkeypatch.setenv(name, 'false')
     monkeypatch.setenv('LLM_MODEL', '')
     monkeypatch.setenv('LLM_API_KEY', '')
-    state = SimpleNamespace(calls=[], after_judge=None, fail=False)
+    state = SimpleNamespace(calls=[], after_judge=None, fail=False, verdict=None)
 
     class Handler(BaseHTTPRequestHandler):
         timeout = 3
@@ -47,7 +47,7 @@ def chat_server(monkeypatch):
             else:
                 if '只输出 JSON' in prompt:
                     evidence = prompt.split('检索片段：\n', 1)[1].split('\n\n判定规则：', 1)[0]
-                    answer = json.dumps({'verdict': 'SUFFICIENT' if evidence.strip() else 'NONE'})
+                    answer = json.dumps({'verdict': state.verdict or ('SUFFICIENT' if evidence.strip() else 'NONE')})
                     callback, state.after_judge = state.after_judge, None
                     if callback is not None:
                         callback()
@@ -132,6 +132,9 @@ def test_public_crud_qa_model_snapshot_and_deletion_sync(workspace):
     for chunk in initial_chunks:
         assert body.encode('utf-8')[chunk['byte_start']:chunk['byte_end']].decode('utf-8') == chunk['text']
 
+    before_question = source_truth(w.storage.a)
+    before_vectors = w.storage.b.inspect()
+
     # Save during the real HTTP judgment call. Generation must retain this question's session.
     w.chat.after_judge = lambda: w.models.save({
         'provider': 'openai', 'model': 'second-model', 'base_url': w.chat.url, 'api_key': '',
@@ -142,6 +145,14 @@ def test_public_crud_qa_model_snapshot_and_deletion_sync(workspace):
     assert [call[0] for call in w.chat.calls] == ['first-model', 'first-model']
     assert answer.json()['sources'][0]['chunk_id'] == answer.json()['trace'][-1]['retrieved'][0]['chunk_id']
     assert answer.json()['sources'][0]['document_id'] == document_id
+    first = answer.json()
+    first_id = first['history_id']
+    assert first['model'] == {'provider': 'openai', 'model': 'first-model'}
+    assert isinstance(first['elapsed_ms'], int) and first['elapsed_ms'] >= 0
+    first_snapshot = {'id': first_id, 'question': question,
+                      **{key: value for key, value in first.items() if key != 'history_id'}}
+    assert w.client.get(f'/api/question-history/{first_id}').json() == first_snapshot
+    assert source_truth(w.storage.a) == before_question and w.storage.b.inspect() == before_vectors
 
     same = w.client.put(f'/api/documents/{document_id}', json={'content': '\t' + body.replace('\n', '\r\n') + '\n'})
     assert same.status_code == 200 and same.json()['reindexed'] is False
@@ -157,11 +168,15 @@ def test_public_crud_qa_model_snapshot_and_deletion_sync(workspace):
     assert answer.status_code == 200 and '蓝舟8642' in answer.json()['answer']
     assert '白鹭3718' not in str(answer.json()['sources'])
     assert [call[0] for call in w.chat.calls[-2:]] == ['second-model', 'second-model']
+    second_id = answer.json()['history_id']
+    assert second_id != first_id and answer.json()['model']['model'] == 'second-model'
+    assert w.client.get(f'/api/question-history/{first_id}').json() == first_snapshot
     assert w.client.post(f'/api/documents/{document_id}/reindex').status_code == 202
     indexed(w)
     w.chat.fail = True
     failure = w.client.post('/api/questions', json={'question': question})
     assert failure.status_code == 502 and 'private-upstream-response' not in failure.text
+    assert w.client.get('/api/question-history').json()['total'] == 2
     w.chat.fail = False
     removed = w.client.delete(f'/api/documents/{document_id}')
     assert removed.status_code == 204 and removed.content == b''
@@ -172,6 +187,28 @@ def test_public_crud_qa_model_snapshot_and_deletion_sync(workspace):
     assert refused.status_code == 200 and refused.json()['status'] == 'REFUSED'
     assert refused.json()['sources'] == [] and refused.json()['trace'][-1]['retrieved'] == []
     assert w.client.delete('/api/model-config').json()['configured'] is False
+    refused_id = refused.json()['history_id']
+    assert w.client.get(f'/api/question-history/{first_id}').json() == first_snapshot
+    page = w.client.get('/api/question-history', params={'size': 1}).json()
+    assert page['total'] == 3 and [item['id'] for item in page['items']] == [refused_id]
+    assert set(page['items'][0]) == {'id', 'question', 'status', 'created_at', 'model', 'elapsed_ms'}
+    assert w.client.get('/api/question-history?page=1&size=1').json()['items'][0]['id'] == second_id
+    assert w.client.get('/api/question-history?page=2&size=1').json()['items'][0]['id'] == first_id
+    assert w.client.get('/api/question-history?page=3&size=1').json() == {'total': 3, 'items': []}
+
+    # Existing records remain usable without a model or retrieval service.
+    model_calls = len(w.chat.calls)
+    w.storage.b.close()
+    assert w.client.post('/api/admin/ready').status_code == 503
+    before_delete = source_truth(w.storage.a)
+    assert w.client.get('/api/question-history').status_code == 200
+    assert w.client.get(f'/api/question-history/{first_id}').json() == first_snapshot
+    removed_history = w.client.delete(f'/api/question-history/{second_id}')
+    assert removed_history.status_code == 204 and removed_history.content == b''
+    assert source_truth(w.storage.a) == before_delete and len(w.chat.calls) == model_calls
+    assert w.client.get('/api/question-history').json()['total'] == 2
+    assert w.client.get(f'/api/question-history/{second_id}').status_code == 404
+    assert w.client.delete(f'/api/question-history/{second_id}').status_code == 404
 
 
 def test_unavailable_retrieval_keeps_intake_pending_and_models_usable(workspace):
@@ -233,3 +270,37 @@ def test_real_maintenance_process_obeys_lock_and_rebuilds_the_selected_database(
     finally:
         b.close()
         a.close()
+
+
+def test_partial_answer_history_roundtrips_without_indexing_generated_text(workspace):
+    w = workspace
+    assert w.client.post('/api/admin/ready').status_code == 200
+    configure(w, 'partial-model')
+    w.client.post('/api/documents', files={'file': ('partial.txt', '报名口令是白鹭3718。'.encode('utf-8'))})
+    indexed(w)
+    w.chat.verdict = 'PARTIAL'
+    before = source_truth(w.storage.a), w.storage.b.inspect()
+    response = w.client.post('/api/questions', json={'question': '报名口令和未收录的日程？'})
+    assert response.status_code == 200 and response.json()['status'] == 'PARTIAL'
+    detail = w.client.get('/api/question-history/' + str(response.json()['history_id'])).json()
+    assert detail['status'] == 'PARTIAL' and detail['trace'][-1]['decision'] == 'PARTIAL'
+    assert detail['sources'] == response.json()['sources']
+    assert (source_truth(w.storage.a), w.storage.b.inspect()) == before
+
+
+@pytest.mark.parametrize('path', [
+    '/api/question-history?page=-1', '/api/question-history?size=0',
+    '/api/question-history?size=101', '/api/question-history?page=oops',
+    '/api/question-history?page=2147483648', '/api/question-history/invalid',
+    '/api/question-history/9223372036854775808',
+])
+def test_history_rejects_invalid_pagination_and_ids(workspace, path):
+    response = workspace.client.get(path)
+    assert response.status_code == 400 and set(response.json()) == {'error'}
+    assert workspace.chat.calls == []
+
+
+def test_empty_history_and_missing_record_are_explicit(workspace):
+    assert workspace.client.get('/api/question-history').json() == {'total': 0, 'items': []}
+    assert workspace.client.get('/api/question-history/404').status_code == 404
+    assert workspace.client.delete('/api/question-history/404').status_code == 404

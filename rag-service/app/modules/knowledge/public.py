@@ -2,6 +2,7 @@
 
 from ._intake import content_hash, prepare_upload, validate_content
 from ._database import DatabaseSettings
+from ._history import HistoryNotFound, HistoryPage, HistoryRecord, HistorySummary, HistoryWrite
 from ._repository import Knowledge
 from ._types import (
     ChunkWrite, DatabaseUnavailable, Document, DocumentNotFound, DocumentPage,

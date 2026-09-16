@@ -39,15 +39,30 @@ chunk = Table(
     Column('created_at', DateTime, nullable=False, server_default=text('CURRENT_TIMESTAMP')),
     Index('uk_document_seq', 'document_id', 'seq', unique=True),
 )
+question_history = Table(
+    'question_history', metadata,
+    Column('id', BigInteger, primary_key=True, autoincrement=True),
+    Column('question', TEXT, nullable=False),
+    Column('answer', LONGTEXT, nullable=False),
+    Column('status', ENUM('ANSWERED', 'PARTIAL', 'REFUSED'), nullable=False),
+    Column('created_at', DateTime, nullable=False, server_default=text('CURRENT_TIMESTAMP')),
+    Column('elapsed_ms', Integer, nullable=False),
+    Column('model', JSON, nullable=False),
+    Column('sources', JSON, nullable=False),
+    Column('trace', JSON, nullable=False),
+    Index('idx_question_history_created', 'created_at', 'id'),
+)
+
 
 
 def _default(value):
     return None if value is None else str(value).lower().replace('(', '').replace(')', '').strip("'")
 
 
-def verify_schema(connection):
+def verify_schema(connection, *, include_history=True):
     inspector = inspect(connection)
-    for table in (document, chunk):
+    tables = (document, chunk, question_history) if include_history else (document, chunk)
+    for table in tables:
         options = connection.execute(text('''SELECT ENGINE, TABLE_COLLATION
             FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=:name'''),
             {'name': table.name}).first()
@@ -84,8 +99,8 @@ def verify_schema(connection):
         if actual_indexes != expected_indexes:
             raise SchemaMismatch(f'{table.name}: incompatible indexes')
         foreign_keys = inspector.get_foreign_keys(table.name)
-        if table is document and foreign_keys:
-            raise SchemaMismatch('document: unexpected foreign keys')
+        if table is not chunk and foreign_keys:
+            raise SchemaMismatch(f'{table.name}: unexpected foreign keys')
         if table is chunk:
             if len(foreign_keys) != 1:
                 raise SchemaMismatch('chunk: missing document ownership constraint')

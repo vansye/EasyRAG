@@ -29,13 +29,37 @@ async function fixture() {
   }
   const answer = {
     answer: 'Fixture answer [1]', status: 'ANSWERED',
+    history_id: 1, created_at: '2026-09-15T12:00:00',
+    model: { provider: 'openai', model: 'fixture-model' }, elapsed_ms: 2400,
     sources: [{ chunk_id: 10, document_id: 1, title: docs[0].title, text: docs[0].content, byte_start: 0, byte_end: 12, heading_path: 'Original' }],
     trace: [{ round_index: 1, query: 'Question', decision: 'SUFFICIENT', retrieved: [{ chunk_id: 10, document_id: 1, rank: 1, score: 0.8 }] }],
   }
-  const logs = { writes: [], confirmDialogs: [], pageErrors: [], externalRequests: [] }
+  const history = []
+  function seedHistory(id, question, changes = {}) {
+    const { history_id, ...saved } = structuredClone(answer)
+    const record = { ...saved, id, question, ...changes }
+    history.push(record)
+    return record
+  }
+  function completeQuestion(route) {
+    const id = Math.max(0, ...history.map(record => record.id)) + 1
+    const record = seedHistory(id, route.request().postDataJSON().question)
+    const { id: savedId, question, ...saved } = record
+    return route.fulfill({ json: { ...saved, history_id: savedId } })
+  }
+  function historyPage(url) {
+    const page = Number(url.searchParams.get('page'))
+    const size = Number(url.searchParams.get('size'))
+    const items = [...history].sort((left, right) => right.created_at.localeCompare(left.created_at) || right.id - left.id)
+      .slice(page * size, (page + 1) * size)
+      .map(({ id, question, status, created_at, model, elapsed_ms }) => ({ id, question, status, created_at, model, elapsed_ms }))
+    return { total: history.length, items }
+  }
+  const logs = { writes: [], confirmDialogs: [], pageErrors: [], externalRequests: [], questions: [], historyReads: [], historyDeletes: [], documentReads: [], knowledgeWrites: [] }
   const controls = {
     acceptDiscard: false, holdWrite: false, mutation: null, onQuestion: null,
     holdHealth: false, healthWaiters: [], afterWrite: null, readyCalls: 0, onUpload: null, failHealth: false,
+    onHistoryList: null, onHistoryDetail: null, beforeHistoryDelete: null, onHistoryDelete: null, pendingReleases: [],
   }
   let mutationStarted
   controls.mutationStarted = new Promise(resolve => { mutationStarted = resolve })
@@ -61,8 +85,34 @@ async function fixture() {
       return route.fulfill({ json: { state: 'READY', recovered: 0 } })
     }
     if (url.pathname === '/api/questions') {
+      logs.questions.push(request.postDataJSON())
       if (controls.onQuestion) return controls.onQuestion(route)
-      return route.fulfill({ json: answer })
+      return completeQuestion(route)
+    }
+    if (url.pathname === '/api/question-history') {
+      logs.historyReads.push(url.search)
+      if (controls.onHistoryList) return controls.onHistoryList(route, url)
+      return route.fulfill({ json: historyPage(url) })
+    }
+    const historyMatch = url.pathname.match(/^\/api\/question-history\/(\d+)$/)
+    if (historyMatch) {
+      const id = Number(historyMatch[1])
+      const record = history.find(item => item.id === id)
+      if (request.method() === 'DELETE') {
+        if (!record) return route.fulfill({ status: 404, json: { error: 'History record no longer exists' } })
+        if (controls.beforeHistoryDelete) await controls.beforeHistoryDelete(id)
+        history.splice(history.indexOf(record), 1)
+        logs.historyDeletes.push(id)
+        if (controls.onHistoryDelete) await controls.onHistoryDelete(id)
+        return route.fulfill({ status: 204 })
+      }
+      if (controls.onHistoryDetail) return controls.onHistoryDetail(route, id)
+      return record
+        ? route.fulfill({ json: record })
+        : route.fulfill({ status: 404, json: { error: 'History record no longer exists' } })
+    }
+    if (url.pathname.startsWith('/api/documents') && request.method() !== 'GET') {
+      logs.knowledgeWrites.push({ method: request.method(), path: url.pathname })
     }
     if (url.pathname === '/api/documents') {
       if (request.method() === 'POST') {
@@ -75,6 +125,7 @@ async function fixture() {
     }
     const match = url.pathname.match(/^\/api\/documents\/(\d+)(\/chunks|\/reindex)?$/)
     if (match) {
+      if (request.method() === 'GET') logs.documentReads.push(url.pathname)
       const item = docs.find(doc => doc.id === Number(match[1]))
       if (request.method() === 'PUT') {
         const body = request.postDataJSON()
@@ -94,7 +145,7 @@ async function fixture() {
     }
     return route.fulfill({ status: 404, json: { error: 'Unspecified fixture API' } })
   })
-  return { context, page, docs, runtime, logs, controls }
+  return { context, page, docs, runtime, answer, history, seedHistory, completeQuestion, historyPage, logs, controls }
 }
 
 // Wait for the router to settle even when it rejects browser Back.
@@ -123,6 +174,7 @@ async function run(name, action) {
     test.controls.holdHealth = false
     for (const release of test.controls.healthWaiters) release()
     test.controls.mutation?.()
+    for (const release of test.controls.pendingReleases) release()
     await test.context.close()
   }
 }
@@ -329,6 +381,375 @@ try {
     assert.equal(await page.locator('.app-notices .notice-warm').count(), 1)
   })
 
+
+  await run('saved history survives reload and shows the full deleted-source snapshot', async ({ page, answer, docs, runtime, logs }) => {
+    const snapshot = Array.from({ length: 14 }, (_, index) => 'Saved source line ' + (index + 1)).join('\n')
+    answer.sources[0].text = snapshot + '\n<img src=x onerror=alert(1)>'
+    answer.answer = 'Saved answer [1]\n\n<script>window.historyInjected = true</script>'
+    await page.goto(base + '/ask')
+    await page.waitForLoadState('networkidle')
+    assert.equal(await page.locator('.question-history').count(), 1, 'history panel is present')
+    await page.locator('#knowledge-question').fill('Remember this answer')
+    await page.locator('.send-button').click()
+    await page.locator('[data-history-id="1"]').waitFor()
+    docs.splice(0, 1)
+    runtime.llm.model = 'changed-after-save'
+    await page.evaluate(() => localStorage.clear())
+    await page.reload()
+    await page.locator('[data-history-id="1"] .history-select').click()
+    await page.locator('.answer-question h2').filter({ hasText: 'Remember this answer' }).waitFor()
+    assert.equal(await page.locator('.source-card .source-snapshot').textContent(), answer.sources[0].text)
+    assert.equal(await page.locator('.source-card .source-snapshot').evaluate(element => element.clientHeight >= element.scrollHeight), true)
+    assert.equal(await page.locator('.source-card .source-open, .source-card button.source-title').count(), 0)
+    assert.match(await page.locator('.answer-model').innerText(), /openai.*fixture-model/)
+    assert.match(await page.locator('.answer-saved-at').innerText(), /2026-09-15 12:00:00/)
+    assert.match(await page.locator('.answer-bottomline').innerText(), /2\.4/)
+    await page.locator('.trace-details > summary').click()
+    await page.locator('.retrieval-snapshot > summary').click()
+    assert.equal(await page.locator('.retrieval-snapshot .source-snapshot').textContent(), answer.sources[0].text)
+    assert.equal(await page.locator('.answer-body script, .source-snapshot img').count(), 0)
+    assert.equal(await page.evaluate(() => window.historyInjected), undefined)
+    assert.equal(new URL(page.url()).searchParams.has('document'), false)
+    assert.deepEqual(logs.documentReads, [])
+    assert.equal(logs.questions.length, 1)
+    assert.ok(logs.historyReads.length >= 3)
+  })
+
+  await run('history pagination returns to the preceding page after deleting its last record', async ({ page, history, seedHistory, logs }) => {
+    for (let id = 1; id <= 21; id++) seedHistory(id, 'Saved question ' + id)
+    await page.goto(base + '/ask')
+    await page.waitForLoadState('networkidle')
+    assert.equal(await page.locator('.question-history').count(), 1, 'history panel is present')
+    assert.equal(await page.locator('.history-select').count(), 20)
+    assert.match(await page.locator('.history-select').first().innerText(), /Saved question 21/)
+    await page.getByRole('button', { name: '\u4e0b\u4e00\u9875', exact: true }).click()
+    await page.locator('[data-history-id="1"]').waitFor()
+    assert.equal(await page.locator('.history-select').count(), 1)
+    await page.locator('[data-history-id="1"] .history-select').click()
+    await page.locator('.answer-question h2').filter({ hasText: 'Saved question 1' }).waitFor()
+    await page.locator('[data-history-id="1"] .history-delete').click()
+    await page.locator('.history-confirm-delete').click()
+    await page.locator('[data-history-id="21"]').waitFor()
+    assert.equal(await page.locator('.history-select').count(), 20)
+    assert.equal(await page.locator('.answer-paper').count(), 0)
+    assert.equal(await page.getByRole('button', { name: '\u4e0a\u4e00\u9875', exact: true }).isDisabled(), true)
+    assert.equal(history.length, 20)
+    assert.deepEqual(logs.historyDeletes, [1])
+    assert.deepEqual(logs.knowledgeWrites, [])
+    assert.deepEqual(logs.questions, [])
+    assert.ok(logs.historyReads.includes('?page=1&size=20'))
+  })
+
+  await run('history remains readable and deletable while retrieval is unavailable', async ({ page, seedHistory, runtime, logs }) => {
+    seedHistory(1, 'Saved with sources')
+    seedHistory(2, 'Saved refusal', { status: 'REFUSED', answer: 'No evidence was sufficient.', sources: [], trace: [{ round_index: 1, query: 'Unrelated question', decision: 'NONE', retrieved: [{ document_id: 99, chunk_id: 990, rank: 1, score: 0.1 }] }] })
+    runtime.rag_available = false
+    runtime.llm.configured = false
+    await page.goto(base + '/ask')
+    await page.waitForLoadState('networkidle')
+    assert.equal(await page.locator('.question-history').count(), 1, 'history panel is present')
+    await page.locator('[data-history-id="2"] .history-select').click()
+    await page.locator('.answer-question h2').filter({ hasText: 'Saved refusal' }).waitFor()
+    assert.equal(await page.locator('.history-reask').isDisabled(), true)
+    await page.locator('.trace-details > summary').click()
+    assert.match(await page.locator('.retrieval-unavailable').innerText(), /990/)
+    assert.equal(await page.locator('.retrieval-list button, .retrieval-list a, .retrieval-snapshot').count(), 0)
+    await page.locator('[data-history-id="1"] .history-select').click()
+    await page.locator('.source-card .source-snapshot').waitFor()
+    await page.locator('[data-history-id="2"] .history-delete').click()
+    await page.locator('.history-confirm-delete').click()
+    await page.locator('[data-history-id="2"]').waitFor({ state: 'hidden' })
+    assert.equal(await page.locator('.answer-question h2').innerText(), 'Saved with sources')
+    assert.deepEqual(logs.questions, [])
+    assert.deepEqual(logs.documentReads, [])
+    assert.deepEqual(logs.knowledgeWrites, [])
+    assert.deepEqual(logs.historyDeletes, [2])
+  })
+
+  await run('reasking saves another record with response metadata and only the original question', async ({ page, seedHistory, answer, history, runtime, logs }) => {
+    seedHistory(1, 'Ask this again', { model: { provider: 'ollama', model: 'old-saved-model' }, elapsed_ms: 10000 })
+    runtime.llm.model = 'cached-runtime-model'
+    answer.model = { provider: 'openai', model: 'current-answer-model' }
+    answer.elapsed_ms = 3700
+    await page.goto(base + '/ask')
+    await page.waitForLoadState('networkidle')
+    assert.equal(await page.locator('.question-history').count(), 1, 'history panel is present')
+    await page.locator('[data-history-id="1"] .history-select').click()
+    await page.locator('.history-reask').click()
+    await page.locator('[data-history-id="2"]').waitFor()
+    assert.equal(await page.locator('.answer-question h2').innerText(), 'Ask this again')
+    assert.match(await page.locator('.answer-model').innerText(), /openai.*current-answer-model/)
+    assert.match(await page.locator('.answer-bottomline').innerText(), /3\.7/)
+    assert.deepEqual(logs.questions, [{ question: 'Ask this again' }])
+    assert.equal(history.length, 2)
+    assert.equal(history[0].model.model, 'old-saved-model')
+    assert.deepEqual(logs.knowledgeWrites, [])
+  })
+
+  await run('a delayed history detail cannot replace the later selection', async ({ page, seedHistory, history, controls }) => {
+    seedHistory(1, 'Slow first selection')
+    seedHistory(2, 'Latest selection')
+    let release
+    const held = new Promise(resolve => { release = resolve })
+    controls.pendingReleases.push(release)
+    controls.onHistoryDetail = async (route, id) => {
+      if (id === 1) await held
+      return route.fulfill({ json: history.find(record => record.id === id) })
+    }
+    await page.goto(base + '/ask')
+    await page.waitForLoadState('networkidle')
+    assert.equal(await page.locator('.question-history').count(), 1, 'history panel is present')
+    const slowRequest = page.waitForRequest(base + '/api/question-history/1')
+    await page.locator('[data-history-id="1"] .history-select').click()
+    await slowRequest
+    await page.locator('.history-detail-loading').waitFor()
+    assert.equal(await page.locator('[data-history-id="1"] .history-select').getAttribute('aria-current'), 'true')
+    await page.locator('[data-history-id="2"] .history-select').click()
+    await page.locator('.answer-question h2').filter({ hasText: 'Latest selection' }).waitFor()
+    await page.locator('.app-nav a[href="/ask"]').focus()
+    const oldResponse = page.waitForResponse(base + '/api/question-history/1')
+    release()
+    await (await oldResponse).finished()
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    assert.equal(await page.locator('.answer-question h2').innerText(), 'Latest selection')
+    assert.equal(await page.locator('[data-history-id="2"] .history-select').getAttribute('aria-current'), 'true')
+    assert.equal(await page.evaluate(() => document.activeElement === document.querySelector('.app-nav a[href="/ask"]')), true, 'a stale detail must not reclaim focus')
+  })
+
+  await run('a completed question cannot replace history selected during generation', async ({ page, seedHistory, completeQuestion, controls }) => {
+    seedHistory(1, 'History kept on screen')
+    let release
+    const held = new Promise(resolve => { release = resolve })
+    controls.pendingReleases.push(release)
+    controls.onQuestion = async route => { await held; return completeQuestion(route) }
+    await page.goto(base + '/ask')
+    await page.waitForLoadState('networkidle')
+    assert.equal(await page.locator('.question-history').count(), 1, 'history panel is present')
+    await page.locator('#knowledge-question').fill('New question in progress')
+    const pending = page.waitForRequest(base + '/api/questions')
+    await page.locator('.send-button').click()
+    await pending
+    await page.locator('[data-history-id="1"] .history-select').click()
+    await page.locator('.answer-question h2').filter({ hasText: 'History kept on screen' }).waitFor()
+    assert.match(await page.locator('.answer-loading').innerText(), /New question in progress/)
+    await page.locator('.app-nav a[href="/ask"]').focus()
+    release()
+    await page.locator('[data-history-id="2"]').waitFor()
+    assert.equal(await page.locator('.answer-question h2').innerText(), 'History kept on screen')
+    assert.equal(await page.locator('[data-history-id="1"] .history-select').getAttribute('aria-current'), 'true')
+    assert.equal(await page.evaluate(() => document.activeElement === document.querySelector('.app-nav a[href="/ask"]')), true, 'a background answer must not reclaim focus')
+    await page.locator('.question-saved-notice button').click()
+    await page.locator('.answer-question h2').filter({ hasText: 'New question in progress' }).waitFor()
+  })
+
+  await run('deleting a record invalidates its pending detail response', async ({ page, seedHistory, controls, logs }) => {
+    const record = seedHistory(1, 'Removed while loading')
+    let release
+    const held = new Promise(resolve => { release = resolve })
+    controls.pendingReleases.push(release)
+    controls.onHistoryDetail = async route => { await held; return route.fulfill({ json: record }) }
+    await page.goto(base + '/ask')
+    await page.waitForLoadState('networkidle')
+    assert.equal(await page.locator('.question-history').count(), 1, 'history panel is present')
+    const pending = page.waitForRequest(base + '/api/question-history/1')
+    await page.locator('[data-history-id="1"] .history-select').click()
+    await pending
+    await page.locator('[data-history-id="1"] .history-delete').click()
+    await page.locator('.history-confirm-delete').click()
+    await page.locator('[data-history-id="1"]').waitFor({ state: 'hidden' })
+    const oldResponse = page.waitForResponse(response => response.url() === base + '/api/question-history/1' && response.request().method() === 'GET')
+    release()
+    await (await oldResponse).finished()
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    assert.equal(await page.locator('.answer-paper, .history-detail-loading').count(), 0)
+    assert.deepEqual(logs.historyDeletes, [1])
+    assert.deepEqual(logs.knowledgeWrites, [])
+  })
+
+  await run('a history storage failure does not display or create a completed answer', async ({ page, seedHistory, controls, history, logs }) => {
+    seedHistory(1, 'Earlier saved answer')
+    controls.onQuestion = route => route.fulfill({ status: 500, json: { error: 'History storage failed' } })
+    await page.goto(base + '/ask')
+    await page.waitForLoadState('networkidle')
+    assert.equal(await page.locator('.question-history').count(), 1, 'history panel is present')
+    await page.locator('#knowledge-question').fill('Unsaved question')
+    await page.locator('.send-button').click()
+    await page.locator('.question-error').waitFor()
+    assert.match(await page.locator('.question-error').innerText(), /History storage failed/)
+    assert.equal(await page.locator('.answer-paper, .answer-loading, .question-saved-notice').count(), 0)
+    assert.equal(await page.locator('.history-select').count(), 1)
+    assert.equal(history.length, 1)
+    assert.equal(logs.questions.length, 1)
+    await page.locator('[data-history-id="1"] .history-select').click()
+    await page.locator('.answer-question h2').filter({ hasText: 'Earlier saved answer' }).waitFor()
+  })
+
+  await run('an older list response cannot erase a newly saved record', async ({ page, controls, completeQuestion, historyPage }) => {
+    let release
+    const held = new Promise(resolve => { release = resolve })
+    controls.pendingReleases.push(release)
+    let first = true
+    controls.onHistoryList = async (route, url) => {
+      if (first) {
+        first = false
+        await held
+        return route.fulfill({ json: { total: 0, items: [] } })
+      }
+      return route.fulfill({ json: historyPage(url) })
+    }
+    controls.onQuestion = completeQuestion
+    await page.goto(base + '/ask')
+    await page.locator('.question-composer').waitFor()
+    assert.equal(await page.locator('.question-history').count(), 1, 'history panel is present')
+    await page.locator('#knowledge-question').fill('Saved during old history load')
+    await page.locator('.send-button').click()
+    await page.locator('[data-history-id="1"]').waitFor()
+    const oldResponse = page.waitForResponse(base + '/api/question-history?page=0&size=20')
+    release()
+    await (await oldResponse).finished()
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    assert.equal(await page.locator('.history-select').count(), 1)
+    assert.match(await page.locator('.history-select').innerText(), /Saved during old history load/)
+  })
+
+
+  await run('confirmed deletion stays removed when refresh fails and an older list arrives', async ({ page, seedHistory, historyPage, controls, logs }) => {
+    for (let id = 1; id <= 4; id++) seedHistory(id, 'Deletion review ' + id)
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.goto(base + '/ask')
+    await page.waitForLoadState('networkidle')
+    for (const [index, arrival] of ['before', 'after'].entries()) {
+      const id = index + 1
+      const selector = '[data-history-id="' + id + '"]'
+      await page.locator(selector + ' .history-select').click()
+      await page.locator('.answer-question h2').filter({ hasText: 'Deletion review ' + id }).waitFor()
+      let releaseList, releaseDelete, deleteStarted
+      const oldList = new Promise(resolve => { releaseList = resolve })
+      const deleteAck = new Promise(resolve => { releaseDelete = resolve })
+      const deletion = new Promise(resolve => { deleteStarted = resolve })
+      controls.pendingReleases.push(releaseList, releaseDelete)
+      let firstList = true
+      controls.onHistoryList = async (route, url) => {
+        if (firstList) {
+          firstList = false
+          const oldPage = structuredClone(historyPage(url))
+          await oldList
+          return route.fulfill({ json: oldPage })
+        }
+        return route.fulfill({ status: 500, json: { error: 'History refresh failed' } })
+      }
+      controls.onHistoryDelete = async () => { deleteStarted(); await deleteAck }
+      const listed = page.waitForRequest(base + '/api/question-history?page=0&size=20')
+      await page.locator('.history-refresh').click()
+      const oldRequest = await listed
+      await page.locator(selector + ' .history-delete').click()
+      await page.locator('.history-confirm-delete').click()
+      await deletion
+      assert.equal(await page.locator(selector).count(), 1, 'keep the row until DELETE is acknowledged')
+      if (arrival === 'before') {
+        releaseList()
+        await (await oldRequest.response()).finished()
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+        assert.equal(await page.locator(selector).count(), 1, 'an unacknowledged deletion is not optimistic')
+      }
+      releaseDelete()
+      await page.locator('.history-error').filter({ hasText: 'History refresh failed' }).waitFor()
+      assert.equal(await page.locator(selector).count(), 0, 'a confirmed deletion remains removed when list refresh fails')
+      assert.equal(await page.locator('.history-heading .count-badge').innerText(), String(4 - id))
+      if (arrival === 'after') {
+        releaseList()
+        await (await oldRequest.response()).finished()
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+        assert.equal(await page.locator(selector).count(), 0, 'a stale list cannot restore the deleted record')
+        assert.equal(await page.locator('.history-heading .count-badge').innerText(), String(4 - id))
+      }
+      assert.equal(await page.locator('.answer-paper').count(), 0)
+    }
+    for (let id = 5; id <= 23; id++) seedHistory(id, 'Deletion review ' + id)
+    controls.onHistoryDelete = null
+    controls.onHistoryList = null
+    await page.locator('.history-refresh').click()
+    await page.locator('[data-history-id="23"]').waitFor()
+    for (const [index, commit] of ['before', 'after'].entries()) {
+      const id = index + 3
+      const selector = '[data-history-id="' + id + '"]'
+      const question = 'Saved while deletion waits ' + commit + ' commit'
+      await page.getByRole('button', { name: '\u4e0b\u4e00\u9875', exact: true }).click()
+      await page.locator(selector).waitFor()
+      assert.equal(await page.locator('.history-select').count(), 1)
+      let releaseDelete, deleteStarted
+      const deleteAck = new Promise(resolve => { releaseDelete = resolve })
+      const deletion = new Promise(resolve => { deleteStarted = resolve })
+      controls.pendingReleases.push(releaseDelete)
+      const holdDeletion = async () => { deleteStarted(); await deleteAck }
+      controls.beforeHistoryDelete = commit === 'before' ? holdDeletion : null
+      controls.onHistoryDelete = commit === 'after' ? holdDeletion : null
+      await page.locator(selector + ' .history-delete').click()
+      await page.locator('.history-confirm-delete').click()
+      await deletion
+      const listResponse = page.waitForResponse(base + '/api/question-history?page=0&size=20')
+      await page.locator('#knowledge-question').fill(question)
+      await page.locator('.send-button').click()
+      await page.locator('.answer-question h2').filter({ hasText: question }).waitFor()
+      const response = await listResponse
+      const concurrentPage = await response.json()
+      await response.finished()
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+      assert.equal(concurrentPage.items.some(item => item.id === id), false, 'page one omits the deleted ID on either side of the server commit')
+      assert.equal(concurrentPage.total, commit === 'before' ? 22 : 21)
+      assert.equal(await page.locator(selector).count(), 1, 'keep the confirmed page while DELETE is pending')
+      assert.equal(await page.locator('.history-heading .count-badge').innerText(), '21', 'do not adopt a concurrent total before DELETE is acknowledged')
+      assert.match(await page.locator('.history-pagination').innerText(), /2 \/ 2/)
+      controls.onHistoryList = route => route.fulfill({ status: 500, json: { error: 'History refresh failed' } })
+      releaseDelete()
+      await page.locator('.history-error').filter({ hasText: 'History refresh failed' }).waitFor()
+      assert.equal(await page.locator(selector).count(), 0)
+      assert.equal(await page.locator('.history-select').count(), 0)
+      assert.equal(await page.locator('.history-heading .count-badge').innerText(), '20', 'remove only the confirmed deletion from the retained snapshot')
+      assert.match(await page.locator('.history-pagination').innerText(), /1 \/ 1/)
+      assert.equal(await page.getByRole('button', { name: '\u4e0a\u4e00\u9875', exact: true }).isDisabled(), true)
+      assert.equal(await page.locator('.answer-question h2').innerText(), question, 'deleting an earlier record does not clear the new answer')
+      controls.beforeHistoryDelete = null
+      controls.onHistoryDelete = null
+      controls.onHistoryList = null
+      await page.locator('.history-refresh').click()
+      await page.locator('[data-history-id="' + (index + 24) + '"]').waitFor()
+      assert.equal(await page.locator('.history-select').count(), 20)
+      assert.equal(await page.locator('.history-heading .count-badge').innerText(), '21', 'a successful retry restores the authoritative total')
+    }
+    assert.deepEqual(logs.historyDeletes, [1, 2, 3, 4])
+    assert.deepEqual(logs.knowledgeWrites, [])
+    assert.deepEqual(logs.questions, [
+      { question: 'Saved while deletion waits before commit' },
+      { question: 'Saved while deletion waits after commit' },
+    ])
+  })
+
+  await run('selecting history below a long answer brings its question into the narrow viewport', async ({ page, seedHistory, answer }) => {
+    const text = Array.from({ length: 70 }, (_, index) => 'Full saved source line ' + (index + 1)).join('\n')
+    for (const id of [1, 2]) seedHistory(id, 'Long saved answer ' + id, {
+      answer: Array.from({ length: 20 }, () => 'A paragraph in the saved explanation.').join('\n\n') + '\n\nSaved evidence [1]',
+      sources: [{ ...answer.sources[0], text }],
+    })
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.goto(base + '/ask')
+    await page.waitForLoadState('networkidle')
+    await page.locator('[data-history-id="1"] .history-select').click()
+    await page.locator('.answer-question h2').filter({ hasText: 'Long saved answer 1' }).waitFor()
+    const next = page.locator('[data-history-id="2"] .history-select')
+    await next.scrollIntoViewIfNeeded()
+    assert.equal(await page.locator('.answer-question h2').evaluate(element => element.getBoundingClientRect().bottom < 0), true, 'the previous heading starts above the viewport')
+    await next.click()
+    const heading = page.locator('.answer-question h2').filter({ hasText: 'Long saved answer 2' })
+    await heading.waitFor()
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    const visible = await heading.evaluate(element => {
+      const rect = element.getBoundingClientRect()
+      return rect.top >= 0 && rect.bottom <= window.innerHeight
+    })
+    assert.equal(visible, true, 'the selected history question should be visible without manual scrolling')
+  })
 
   console.log('REGRESSIONS_COMPLETE', JSON.stringify(results))
   if (results.some(result => !result.passed)) process.exitCode = 1
