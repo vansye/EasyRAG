@@ -8,6 +8,9 @@ from dataclasses import dataclass
 from typing import Literal, Protocol, cast
 
 
+from ._citations import citations_are_valid
+
+
 JudgeVerdict = Literal["SUFFICIENT", "PARTIAL", "NONE"]
 AnswerStatus = Literal["ANSWERED", "PARTIAL", "REFUSED"]
 
@@ -153,7 +156,7 @@ class Qa:
             evidence = search.search(question, top_k=top_k)
         except Exception as exc:
             raise QaError("search", type(exc).__name__) from None
-        verdict = _parse_verdict(_complete(chat, _judge_prompt(question, evidence), "judge"))
+        verdict = _parse_verdict(_complete(chat, _judge_prompt(question, evidence), "judge")) if evidence else "NONE"
         trace = (QaTraceEntry(
             round_index=1,
             query=question,
@@ -170,6 +173,8 @@ class Qa:
         answer = _complete(
             chat, _generate_prompt(question, evidence, partial=(verdict == "PARTIAL")), "generate",
         )
+        if not citations_are_valid(answer, len(evidence)):
+            raise QaError("generate", "INVALID_CITATIONS")
         return AnswerDraft(
             answer=answer,
             status="ANSWERED" if verdict == "SUFFICIENT" else "PARTIAL",

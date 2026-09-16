@@ -125,8 +125,40 @@ def test_partial_answer_saves_coverage_and_original_question(workflow):
 
 
 def test_elapsed_time_covers_model_and_sources_before_history_write(workflow,monkeypatch):
-    timer=Mock(side_effect=[20.0,21.75])
-    monkeypatch.setattr('app.application.questions.perf_counter',timer)
+    now=[20.0]
+    monkeypatch.setattr('app.application.questions.perf_counter',lambda:now[0])
+    def sources(chunk_ids):
+        now[0]=21.75
+        return workflow.sources
+    def save(record):
+        now[0]=22.25
+        return SimpleNamespace(id=41,created_at=datetime(2026,9,15,12,30))
+    workflow.a.sources.side_effect=sources
+    workflow.a.save_history.side_effect=save
     result=workflow.questions.ask('Question?')
     assert result.elapsed_ms == workflow.a.save_history.call_args.args[0].elapsed_ms == 1750
-    assert timer.call_count == 2
+
+
+@pytest.mark.parametrize('answer', ['Uncited answer', 'Wrong [99]', 'Mixed [1] and [99]', '`array[1]`'])
+def test_invalid_generated_citations_do_not_resolve_sources_or_save_history(workflow,answer):
+    w=workflow
+    w.session.complete.side_effect=['{"verdict":"SUFFICIENT"}',answer]
+    with pytest.raises(QuestionFailed):
+        w.questions.ask('Question?')
+    assert w.session.complete.call_count == 2
+    w.models.open_session.assert_called_once()
+    w.a.sources.assert_not_called()
+    w.a.save_history.assert_not_called()
+    assert w.gate.state == State.READY
+
+
+def test_empty_evidence_saves_a_refusal_without_any_model_completion(workflow):
+    w=workflow
+    w.b.search.return_value=()
+    result=w.questions.ask('No evidence')
+    assert result.status == 'REFUSED' and result.sources == ()
+    w.session.complete.assert_not_called()
+    w.a.sources.assert_not_called()
+    w.a.save_history.assert_called_once()
+    assert w.a.save_history.call_args.args[0].status == 'REFUSED'
+    assert w.gate.state == State.READY
