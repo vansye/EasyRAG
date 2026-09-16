@@ -18,6 +18,8 @@
 
 **优先级 2 实施细化：本地 SDK 准备（F #35 / G #36）**
 
+实现与验证见 [PR #65](https://github.com/vansye/EasyRAG/pull/65) 和 [进度记录](m4-progress-2026-09-16.md)。以下细化来自本轮依赖导入核验，不增加模型预热或改变检索方案。
+
 - F 增加 `Models.prepare()`，只加载两种已支持 provider 所需的 SDK 公共模块及消息类。除 LangChain 与 provider 包外，显式预载 `openai.resources.chat`：两种 provider 在构造客户端时都会访问 `chat.completions`，而 OpenAI SDK 把这部分留到属性首次读取时导入，仅加载 provider 包无法移走全部导入成本。
 - 准备不读取项目模型配置、地址或凭据，不创建模型/HTTP 客户端，不调用生成、不发送网络请求。第三方导入仍会读取安装包元数据、SDK 日志环境变量和 CA 文件；不把它描述成零文件或零环境读取。
 - G 在 `Services.create()` 内、资源所有权转交之前调用准备；既有 lifespan 在持有进程锁的工作线程中等待构造完成，再接收 HTTP 请求。取消仍须等工作线程结束和资源清理，不新增后台任务或就绪状态。
