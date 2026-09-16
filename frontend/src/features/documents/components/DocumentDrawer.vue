@@ -90,17 +90,18 @@ function requestClose() {
 }
 
 async function save() {
-  if (!props.documentId || !detail.value || !canMutate.value) return
+  const id = props.documentId
+  if (!id || !detail.value || !canMutate.value) return
   if (!draft.value.trim()) { error.value = '资料正文不能为空。'; return }
   if (new TextEncoder().encode(draft.value).length > 1024 * 1024) { error.value = '正文超过 1 MB，请拆分后保存。'; return }
   busy.value = true
   error.value = ''
   try {
-    const result = await updateDocumentContent(props.documentId, draft.value)
+    const result = await updateDocumentContent(id, draft.value)
     editing.value = false
-    if (result.reindexed) qa.markSourceChanged(props.documentId)
+    if (result.reindexed) qa.markSourceChanged(id)
     feedback.value = result.reindexed ? '修改已保存，正在重新处理资料。' : '内容没有变化，已保留原有资料。'
-    await Promise.all([load(true), library.load(true), gate.refresh()])
+    await Promise.all([load(true), library.load(true), gate.refreshAfterChange()])
   } catch (failure) {
     gate.raise(failure)
     error.value = failure instanceof Error ? failure.message : '保存失败，请重试。'
@@ -108,34 +109,37 @@ async function save() {
 }
 
 async function remove() {
-  if (!props.documentId || !detail.value || !canMutate.value) return
+  const id = props.documentId
+  if (!id || !detail.value || !canMutate.value) return
+  const title = detail.value.title
   busy.value = true
   error.value = ''
   try {
-    await deleteDocument(props.documentId)
-    qa.markSourceChanged(props.documentId)
-    gate.notice = `「${detail.value.title}」已删除，后续回答不再使用这份资料。`
+    await deleteDocument(id)
+    qa.markSourceChanged(id)
+    gate.notice = `「${title}」已删除，后续回答不再使用这份资料。`
     library.allTotal = Math.max(0, library.allTotal - 1)
     await library.load(true)
     if (library.page >= library.pages) { library.page = library.pages - 1; await library.load(true) }
-    await gate.refresh()
-    busy.value = false
-    emit('close')
+    await gate.refreshAfterChange()
   } catch (failure) {
     gate.raise(failure)
     error.value = failure instanceof Error ? failure.message : '删除失败，请重试。'
+    return
   } finally { busy.value = false }
+  emit('close')
 }
 
 async function retry() {
-  if (!props.documentId || !canMutate.value) return
+  const id = props.documentId
+  if (!id || !canMutate.value) return
   busy.value = true
   error.value = ''
   try {
-    await reindexDocument(props.documentId)
-    qa.markSourceChanged(props.documentId)
+    await reindexDocument(id)
+    qa.markSourceChanged(id)
     feedback.value = '已重新提交处理，完成后即可用于回答。'
-    await Promise.all([load(true), library.load(true), gate.refresh()])
+    await Promise.all([load(true), library.load(true), gate.refreshAfterChange()])
   } catch (failure) {
     gate.raise(failure)
     error.value = failure instanceof Error ? failure.message : '重新处理失败，请重试。'

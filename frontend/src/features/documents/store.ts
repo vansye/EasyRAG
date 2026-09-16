@@ -83,7 +83,7 @@ export const useDocumentStore = defineStore('documents', {
         this.filter = ''
         this.notice = `「${created.title}」已收录，处理完成后即可用于回答。`
         await this.load()
-        void useGateStore().refresh()
+        void useGateStore().refreshAfterChange()
       } catch (failure) {
         useGateStore().raise(failure)
         this.error = failure instanceof Error ? failure.message : '上传失败，请重试。'
