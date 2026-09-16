@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
+from time import perf_counter
 from typing import Literal, Protocol, cast
-
 
 from ._citations import citations_are_valid
 
@@ -82,11 +83,18 @@ def validate_question(question: str) -> None:
         raise ValueError("question must contain at most 2000 code points")
 
 
-def _complete(chat: ChatPort, prompt: str, stage: Literal["judge", "generate"]) -> str:
+def _complete(
+    chat: ChatPort, prompt: str, stage: Literal["judge", "generate"],
+    record_timing: Callable[[str, float], None] | None = None,
+) -> str:
+    started = perf_counter()
     try:
         content = chat.complete(prompt)
     except Exception as exc:
         raise QaError(stage, type(exc).__name__) from None
+    finally:
+        if record_timing is not None:
+            record_timing(stage, (perf_counter() - started) * 1000)
     if not isinstance(content, str) or not content.strip():
         raise QaError(stage, "EMPTY_OR_NON_TEXT_CONTENT")
     return content
@@ -148,6 +156,7 @@ class Qa:
 
     def answer(
         self, question: str, search: SearchPort, chat: ChatPort, top_k: int = 5,
+        *, record_timing: Callable[[str, float], None] | None = None,
     ) -> AnswerDraft:
         validate_question(question)
         if type(top_k) is not int or top_k <= 0:
@@ -156,7 +165,9 @@ class Qa:
             evidence = search.search(question, top_k=top_k)
         except Exception as exc:
             raise QaError("search", type(exc).__name__) from None
-        verdict = _parse_verdict(_complete(chat, _judge_prompt(question, evidence), "judge")) if evidence else "NONE"
+        verdict = _parse_verdict(_complete(
+            chat, _judge_prompt(question, evidence), "judge", record_timing,
+        )) if evidence else "NONE"
         trace = (QaTraceEntry(
             round_index=1,
             query=question,
@@ -172,6 +183,7 @@ class Qa:
             )
         answer = _complete(
             chat, _generate_prompt(question, evidence, partial=(verdict == "PARTIAL")), "generate",
+            record_timing,
         )
         if not citations_are_valid(answer, len(evidence)):
             raise QaError("generate", "INVALID_CITATIONS")

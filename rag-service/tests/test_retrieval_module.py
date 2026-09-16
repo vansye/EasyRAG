@@ -23,6 +23,47 @@ def clean_retrieval_environment(monkeypatch):
             monkeypatch.delenv(name, raising=False)
 
 
+def test_search_times_index_probe_and_query_separately_from_embedding(module, monkeypatch):
+    module.replace(11, (retrieval.IndexChunk(101, "first"),))
+    now, calls, timings = [10.0], [], {}
+    monkeypatch.setattr(retrieval, "perf_counter", lambda: now[0], raising=False)
+    require_index, embed, query = module._require_index, module._embed, module._index.query
+
+    def measured(name, duration, operation):
+        def run(*args, **kwargs):
+            calls.append(name)
+            now[0] += duration
+            return operation(*args, **kwargs)
+        return run
+
+    monkeypatch.setattr(module, "_require_index", measured("probe", 0.125, require_index))
+    monkeypatch.setattr(module, "_embed", measured("embedding", 0.25, embed))
+    monkeypatch.setattr(module._index, "query", measured("query", 0.5, query))
+
+    def record(stage, elapsed):
+        timings[stage] = timings.get(stage, 0) + elapsed
+
+    hits = module.search("query unchanged?", record_timing=record)
+    assert [hit.chunk_id for hit in hits] == [101]
+    assert calls == ["probe", "embedding", "query"]
+    assert timings == {"vector": 625.0, "embedding": 250.0}
+
+
+def test_failed_embedding_is_measured_without_querying_the_index(module, monkeypatch):
+    now, timings = [10.0], {}
+    monkeypatch.setattr(retrieval, "perf_counter", lambda: now[0], raising=False)
+
+    def fail(texts):
+        now[0] += 0.25
+        raise retrieval.RetrievalUnavailable("embedding", "TimeoutError")
+
+    monkeypatch.setattr(module, "_embed", fail)
+    with pytest.raises(retrieval.RetrievalUnavailable) as failure:
+        module.search("query", record_timing=timings.__setitem__)
+    assert failure.value.component == "embedding"
+    assert timings == {"vector": 0.0, "embedding": 250.0}
+
+
 def test_public_split_preserves_heading_paths_body_and_utf8_offsets():
     assert hasattr(retrieval, "split_markdown"), "retrieval must own its pure splitter"
     text = "序言🙂\r\n# 主标题\r\n简介。\r\n## 子章节\r\n内容。\r\n### 深层\r\n细节。\r\n## 另一节\r\n结束。"

@@ -1,12 +1,18 @@
 # 子 Issue C：问答 Agent 模块
 
-## M4 第一项：回答约束（2026-09-16）
+## M4 第一项：回答约束与计时（2026-09-16）
 
 继续关联 #27 / #1，按 [M4 方案](m4-retrieval-and-history-plan-2026-09-15.md) 实施。检索为空时直接 REFUSED，不调用判定/生成；非空候选保持原有三态判断及一轮检索。
 
 生成结果返回前校验正文来源编号：必须有引用，且所有编号在本轮 `1..k` 内。未引用、全部越界或混合越界均为 `QaError("generate", "INVALID_CITATIONS")`，由 G 返回技术失败，不自动重试或保存历史。代码、链接、图片、HTML 与转义文本中的数字不是正文引用；前后端以 `tests/contracts/answer-citations.json` 的共享样例核对。该校验确认编号可映射到来源，不声称能自动证明每个事实都由来源支持。
 
-`chunk_ids` 保留所有交给生成器的证据，G 按最终 trace rank 补全来源与保存快照。可选计时接口由后续独立功能交付。
+```python
+answer(question, search, chat, top_k=5, *, record_timing=None) -> AnswerDraft
+# record_timing("judge" | "generate", elapsed_ms)
+# 回调只承载本次模型调用耗时，不包含问题、提示词或模型凭据。
+```
+
+`chunk_ids` 保留所有交给生成器的证据，不缩为正文实际引用的子集。G 继续按最终 trace rank 补全出处与保存快照。未执行的模型阶段不产生计时；失败调用也报告耗时，之后仍抛出原有安全异常。SDK 准备、流式、有界重查按后续独立任务推进。
 
 ## FastAPI 迁移设计（2026-09-15，当前实施范围）
 

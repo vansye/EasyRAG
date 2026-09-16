@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from app.modules.qa.public import Evidence, Qa, QaError
+from app.modules.qa import public as qa_module
 
 
 CASES = json.loads((Path(__file__).parent / "contracts/answer-citations.json").read_text(encoding="utf-8"))
@@ -56,3 +57,37 @@ def test_prose_citation_contract(case, verdict):
         assert failure.value.cause == "INVALID_CITATIONS"
         assert case["answer"] not in str(failure.value)
     assert chat.calls == 2
+
+
+def test_model_timing_separates_judgement_from_generation(monkeypatch):
+    now = [10.0]
+    monkeypatch.setattr(qa_module, "perf_counter", lambda: now[0], raising=False)
+    chat = Chat("Answer [1]")
+    complete = chat.complete
+
+    def timed_complete(prompt):
+        now[0] += 0.25 if chat.calls == 0 else 1.5
+        return complete(prompt)
+
+    chat.complete = timed_complete
+    timings = {}
+    result = Qa().answer("Question", Search(), chat, record_timing=timings.__setitem__)
+    assert result.status == "ANSWERED" and chat.calls == 2
+    assert timings == {"judge": 250.0, "generate": 1500.0}
+
+
+def test_failed_model_call_still_records_elapsed_time(monkeypatch):
+    now = [10.0]
+    monkeypatch.setattr(qa_module, "perf_counter", lambda: now[0], raising=False)
+    chat = Chat("Unused")
+
+    def fail(prompt):
+        now[0] += 0.25
+        raise RuntimeError("private provider details")
+
+    chat.complete = fail
+    timings = {}
+    with pytest.raises(QaError) as failure:
+        Qa().answer("Question", Search(), chat, record_timing=timings.__setitem__)
+    assert failure.value.stage == "judge"
+    assert timings == {"judge": 250.0}

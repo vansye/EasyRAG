@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from contextlib import contextmanager
 from functools import lru_cache
 from hashlib import sha256
 from pathlib import Path
+from time import perf_counter
 
 import httpx as _httpx
 from tokenizers import Tokenizer as _Tokenizer
@@ -39,6 +41,16 @@ class RetrievalUnavailable(RuntimeError):
         super().__init__(f"{component} unavailable")
         self.component = component
         self.cause = cause
+
+
+@contextmanager
+def _measure(stage: str, record_timing: Callable[[str, float], None] | None):
+    started = perf_counter()
+    try:
+        yield
+    finally:
+        if record_timing is not None:
+            record_timing(stage, (perf_counter() - started) * 1000)
 
 
 @lru_cache(maxsize=1)
@@ -138,17 +150,23 @@ class Retrieval:
         except Exception as exc:
             raise RetrievalUnavailable("index", type(exc).__name__) from None
 
-    def search(self, query: str, top_k: int = 5) -> tuple[SearchHit, ...]:
+    def search(
+        self, query: str, top_k: int = 5,
+        *, record_timing: Callable[[str, float], None] | None = None,
+    ) -> tuple[SearchHit, ...]:
         if not isinstance(query, str) or not query.strip():
             raise ValueError("query must not be blank")
         if type(top_k) is not int or top_k <= 0:
             raise ValueError("top_k must be positive")
-        index = self._require_index()
-        vectors = self._embed([query])
-        try:
-            return index.query(vectors[0], top_k=top_k)
-        except Exception as exc:
-            raise RetrievalUnavailable("index", type(exc).__name__) from None
+        with _measure("vector", record_timing):
+            index = self._require_index()
+        with _measure("embedding", record_timing):
+            vectors = self._embed([query])
+        with _measure("vector", record_timing):
+            try:
+                return index.query(vectors[0], top_k=top_k)
+            except Exception as exc:
+                raise RetrievalUnavailable("index", type(exc).__name__) from None
 
     def inspect(self) -> tuple[IndexEntry, ...]:
         index = self._require_index()
