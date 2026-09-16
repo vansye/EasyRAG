@@ -6,7 +6,9 @@ from dataclasses import asdict
 
 from sqlalchemy import delete, func, insert, select, update
 
+from . import _history
 from ._database import Database, DatabaseSettings
+from ._history import HistoryPage, HistoryRecord, HistoryWrite
 from ._intake import content_hash, java_strip, metadata, prepare_upload, validate_content
 from ._schema import chunk, document
 from ._types import (
@@ -257,11 +259,34 @@ class Knowledge:
                 return existing
             return _replace_chunks(connection, document_id, drafts)
 
+    def save_history(self, entry: HistoryWrite) -> HistoryRecord:
+        with self._transaction() as connection:
+            return _history.save(connection, entry)
+
+    def list_history(self, page=0, size=20) -> HistoryPage:
+        if type(page) is not int or page < 0:
+            raise InputRejected('page 不能为负数')
+        if type(size) is not int or not 1 <= size <= 100:
+            raise InputRejected('size 须在 1 到 100 之间')
+        with self._transaction() as connection:
+            return _history.list_records(connection, page, size)
+
+    def get_history(self, history_id: int) -> HistoryRecord:
+        with self._transaction() as connection:
+            return _history.get(connection, history_id)
+
+    def delete_history(self, history_id: int) -> None:
+        with self._transaction() as connection:
+            _history.delete_record(connection, history_id)
+
     def initialize_database(self):
         self._require_database().initialize()
 
     def adopt_legacy_database(self):
         self._require_database().adopt()
+
+    def upgrade_database(self):
+        self._require_database().upgrade()
 
     def health(self):
         if self._database is None:

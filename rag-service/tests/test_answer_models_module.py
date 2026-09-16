@@ -415,6 +415,41 @@ def test_session_constructs_one_client_and_sends_one_human_message_per_completio
     assert not any(hasattr(session, name) for name in ("client", "settings", "api_key", "invoke", "bind_tools"))
 
 
+def test_session_model_info_is_a_fresh_credential_free_snapshot(tmp_path, monkeypatch):
+    def create_client(model, **_options):
+        return SimpleNamespace(invoke=lambda _messages: SimpleNamespace(content=model))
+
+    monkeypatch.setattr("langchain.chat_models.init_chat_model", create_client)
+    session = answer_models.Models(config_path=tmp_path / "llm.json").open_session()
+
+    snapshot = session.model_info
+
+    assert isinstance(snapshot, dict)
+    assert snapshot == {"provider": "openai", "model": "environment-model"}
+    assert session.model_info == snapshot
+    assert session.model_info is not snapshot
+    snapshot.update(provider="deepseek", model="changed-by-consumer", api_key="private-consumer-key")
+    assert session.model_info == {"provider": "openai", "model": "environment-model"}
+    assert session.complete("question") == "environment-model"
+
+
+def test_session_model_info_uses_the_environment_read_before_client_creation(tmp_path, monkeypatch):
+    def create_client(model, **_options):
+        monkeypatch.setenv("LLM_PROVIDER", "deepseek")
+        monkeypatch.setenv("LLM_MODEL", "changed-environment-model")
+        return SimpleNamespace(invoke=lambda _messages: SimpleNamespace(content=model))
+
+    monkeypatch.setattr("langchain.chat_models.init_chat_model", create_client)
+    models = answer_models.Models(config_path=tmp_path / "llm.json")
+    session = models.open_session()
+
+    assert session.model_info == {"provider": "openai", "model": "environment-model"}
+    assert session.complete("existing question") == "environment-model"
+    next_session = models.open_session()
+    assert next_session.model_info == {"provider": "deepseek", "model": "changed-environment-model"}
+    assert next_session.complete("next question") == "changed-environment-model"
+
+
 def test_concurrent_save_only_changes_the_next_session(tmp_path, monkeypatch):
     started = Event()
     release = Event()
@@ -443,7 +478,10 @@ def test_concurrent_save_only_changes_the_next_session(tmp_path, monkeypatch):
             models.save(update(
                 provider="deepseek", base_url="https://new.example.test/v1", api_key="private-new-key",
             ))
-            assert models.open_session().complete("new question") == "reply from saved-model"
+            assert session.model_info == {"provider": "openai", "model": "environment-model"}
+            next_session = models.open_session()
+            assert next_session.model_info == {"provider": "deepseek", "model": "saved-model"}
+            assert next_session.complete("new question") == "reply from saved-model"
         finally:
             release.set()
         assert pending.result(timeout=5) == "reply from environment-model"
@@ -467,8 +505,11 @@ def test_reset_does_not_change_an_open_session(tmp_path, monkeypatch):
 
     models.reset()
 
+    assert session.model_info == {"provider": "openai", "model": "saved-model"}
     assert session.complete("existing question") == "saved-model"
-    assert models.open_session().complete("next question") == "environment-model"
+    next_session = models.open_session()
+    assert next_session.model_info == {"provider": "openai", "model": "environment-model"}
+    assert next_session.complete("next question") == "environment-model"
 
 
 def test_sdk_load_failure_is_sanitized_and_does_not_break_public_metadata(tmp_path, monkeypatch):

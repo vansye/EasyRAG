@@ -4,7 +4,7 @@
 
 ## 路由
 
-除文件上传外，请求体使用 `application/json`。成功响应为 JSON；删除资料成功时没有响应体。
+除文件上传外，请求体使用 `application/json`。成功响应为 JSON；删除资料或问答历史成功时没有响应体。
 
 | 方法与路径 | 参数 / 请求体 | 成功状态与含义 |
 |---|---|---|
@@ -18,12 +18,15 @@
 | `PUT /api/documents/{document_id}` | `{"content":"完整正文"}` | `200`，`{id, index_status, reindexed}` |
 | `POST /api/documents/{document_id}/reindex` | 路径 ID，无请求体 | `202`，`{id, index_status, reindexed}`，重处理已提交 |
 | `DELETE /api/documents/{document_id}` | 路径 ID | `204`，撤下向量、软删除资料并删除切片 |
-| `POST /api/questions` | `{"question":"问题"}` | `200`，回答、出处与检索过程 |
+| `POST /api/questions` | `{"question":"问题"}` | `200`，已保存的回答、出处、检索过程与历史元数据 |
+| `GET /api/question-history` | `page=0`、`size=20` | `200`，`{total, items}` 历史摘要 |
+| `GET /api/question-history/{history_id}` | 路径 ID | `200`，历史问题、回答与来源快照 |
+| `DELETE /api/question-history/{history_id}` | 路径 ID | `204`，删除该条问答历史 |
 | `GET /api/model-config` | 无 | `200`，当前生效的配置，固定六个公开字段 |
 | `PUT /api/model-config` | `provider/model/base_url`，可选 `api_key` | `200`，保存后的六字段配置 |
 | `DELETE /api/model-config` | 无 | `200`，移除本机覆盖后重新读取启动配置 |
 
-`document_id` 按有符号 64 位整数解析，格式错误或溢出返回 `400`；不存在或已删除的资料返回 `404`。
+`document_id`、`history_id` 按有符号 64 位整数解析，格式错误或溢出返回 `400`；不存在或已删除的资料、问答历史返回 `404`。
 
 | 列表参数 | 规则 |
 |---|---|
@@ -32,7 +35,7 @@
 | `status` | `PENDING / INDEXING / INDEXED / FAILED`，忽略大小写；缺省或全空白不筛选；非空值不要带首尾空格 |
 | `q` | 去掉首尾空白后，在标题中作字面包含搜索；`%`、`_` 不是通配符；缺省或空白不筛选 |
 
-列表按 `updated_at` 降序、`id` 降序排列，不包含已删除资料。`page=1.0` 等小数写法不会转换为整数。
+资料列表按 `updated_at` 降序、`id` 降序排列，不包含已删除资料。`status/q` 仅适用于资料列表。`page=1.0` 等小数写法不会转换为整数。
 
 ## 资料与切片
 
@@ -101,6 +104,7 @@
 
 `seq` 从 `0` 开始；`byte_start/byte_end` 是原文 UTF-8 字节区间 `[start, end)`，不能直接作为 JavaScript 字符串下标。`heading_path` 可为空字符串或 `null`；切片列表不重复返回 `document_id`。
 
+
 切片正文最多 65,535 个 UTF-8 字节；标题路径元数据最多 512 个 Unicode 码点，超长路径在切片时取前 512 个码点，完整标题仍在原文中。切分和合并均满足正文的字节上限及配置的 token 预算；token 数包含正文、标题路径和模型特殊 token。若标题路径与单个正文字符已超过 token 预算，索引会明确失败。
 
 切片范围有序且不重叠，`text` 必须是对应范围的精确原文。首尾和切片之间允许省略纯 Unicode 空白（包括 NBSP、NEL、全角空格），纯空白切片不进入索引；所有非空白字符必须被覆盖。`document.content` 保存完整原文，拼接切片可能缺少这些空白间隙。
@@ -121,6 +125,10 @@
 {
   "answer": "资料中记录了中文内容。[1]",
   "status": "ANSWERED",
+  "history_id": 41,
+  "created_at": "2026-09-15T12:30:00",
+  "model": {"provider": "openai", "model": "qwen2.5:7b-instruct-q4_K_M"},
+  "elapsed_ms": 6400,
   "sources": [{
     "chunk_id": 11,
     "document_id": 7,
@@ -139,9 +147,37 @@
 }
 ```
 
-`status` 为 `ANSWERED / PARTIAL / REFUSED`，对应判定 `SUFFICIENT / PARTIAL / NONE`。依据不足仍是正常 `200`，`answer` 为拒答说明、`sources` 为空，但 `trace` 可以保留检索结果。检索、模型调用、判定输出或出处查询发生技术失败时返回 `502`，不会伪装成拒答。
+`status` 为 `ANSWERED / PARTIAL / REFUSED`，对应判定 `SUFFICIENT / PARTIAL / NONE`。依据不足仍是正常 `200`，`answer` 为拒答说明、`sources` 为空，但 `trace` 可以保留检索结果。检索、模型调用、判定输出、出处查询或历史保存发生技术失败时返回 `502`，不会伪装成拒答。只有历史事务提交成功后才返回 `200`；失败不自动重试模型调用。
 
 `sources` 按最终检索排名排列，以 `chunk_id` 关联 `trace.retrieved`；引用编号对应从 `1` 开始的 `rank`。来源列表表示提供给回答的依据，正文实际使用了哪些引用需另行统计。若出处无法与切片 ID 对齐，服务要求恢复并返回 `503`。
+
+`history_id` 标识本次保存的独立记录。`model` 只包含实际执行本次问答的 `provider/model`，来自同一个冻结会话，不含地址或凭据。`elapsed_ms` 从服务端创建会话前计时，到回答与来源准备完成为止，不包含历史写库和网络传输。`created_at` 是数据库保存时间，沿用资料时间的 Asia/Shanghai 无偏移 ISO 格式。
+
+## 问答历史
+
+`GET /api/question-history` 使用上面的 `page/size` 规则，按 `created_at` 降序、`id` 降序返回摘要。列表不加载答案、来源和 trace，示例：
+
+```json
+{
+  "total": 1,
+  "items": [{
+    "id": 41,
+    "question": "资料记录了什么？",
+    "status": "ANSWERED",
+    "created_at": "2026-09-15T12:30:00",
+    "model": {"provider": "openai", "model": "qwen2.5:7b-instruct-q4_K_M"},
+    "elapsed_ms": 6400
+  }]
+}
+```
+
+`GET /api/question-history/41` 返回 `id/question/answer/status/created_at/model/elapsed_ms/sources/trace`。其中 `id` 等于问答响应的 `history_id`，其余同名字段与保存时一致；没有 `history_id` 重复字段。`ANSWERED / PARTIAL / REFUSED` 都可保存，拒答仍可能有 trace 而没有 sources。
+
+`sources` 保存完整来源文本、标题和字节范围；它们不再依赖当前资料和切片。历史引用应直接显示这份快照，不能用保存的 `document_id/chunk_id` 跳转到当前原文。trace 中能匹配 sources 的条目可展示对应快照；没有保存来源的条目只展示检索记录。更新或删除资料、重建索引不改写历史。
+
+`DELETE /api/question-history/41` 成功返回 `204`；不存在或重复删除返回 `404`。删除只影响这条历史记录，不删除资料、切片或向量。历史列表、详情与删除不经过问答门禁，不调用 embedding 或 LLM；数据库不可用时返回 `503`。
+
+重新提问直接调用 `POST /api/questions`，只发送原问题文本，使用当前知识库和模型并创建新历史。没有会话或轮次，也不会将旧问答自动加入上下文或检索索引。
 
 ## 模型配置
 
@@ -211,10 +247,10 @@ F 模块负责原子保存和移除本机覆盖文件。所有模型配置响应
 | 状态码 | 触发条件 |
 |---|---|
 | `400` | 请求不合法、文件类型/大小/编码不支持、模型配置被拒绝 |
-| `404` | 资料不存在或已删除；路由不存在 |
+| `404` | 资料、问答历史不存在或已删除；路由不存在 |
 | `405` | 路由不支持该请求方法 |
 | `409` | 更新、重处理、删除或确认就绪遇到运行门禁忙 |
-| `502` | 问答技术失败，包括未配置回答模型或上游调用失败 |
+| `502` | 问答技术失败，包括未配置回答模型、上游调用或历史保存失败 |
 | `503` | 数据库/模型配置不可用、需恢复、变更未确认完成；问答遇到门禁忙也为 `503` |
 | `500` | 未预期的服务异常，返回脱敏通用说明 |
 

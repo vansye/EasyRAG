@@ -105,6 +105,35 @@ export interface AnsweredQuestion {
   trace: TraceEntry[]
 }
 
+
+export interface QuestionModel {
+  provider: string
+  model: string
+}
+
+export interface QuestionMetadata {
+  created_at: string
+  model: QuestionModel
+  elapsed_ms: number
+}
+
+export interface SavedQuestion extends AnsweredQuestion, QuestionMetadata {
+  history_id: number
+}
+
+export interface QuestionHistorySummary extends QuestionMetadata {
+  id: number
+  question: string
+  status: AnswerStatus
+}
+
+export interface QuestionHistoryPage {
+  total: number
+  items: QuestionHistorySummary[]
+}
+
+export interface QuestionHistoryDetail extends AnsweredQuestion, QuestionHistorySummary {}
+
 // ---- 健康检查 ----
 
 export interface HealthReport {

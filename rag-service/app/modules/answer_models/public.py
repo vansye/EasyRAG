@@ -47,15 +47,21 @@ class ModelUnavailable(RuntimeError):
 class ChatSession(Protocol):
     """An opaque session obtained from Models.open_session for one question."""
 
+    @property
+    def model_info(self) -> dict[str, str]:
+        """Return a fresh frozen provider/model snapshot without credentials or endpoint."""
+        ...
+
     def complete(self, prompt: str) -> str:
         """Complete one prompt using the same frozen model for this session."""
         ...
 
 
 class _Session:
-    __slots__ = ("__client",)
+    __slots__ = ("__client", "__model_info")
 
     def __init__(self, settings: _Settings, base_url: str) -> None:
+        self.__model_info = {"provider": settings.provider, "model": settings.model}
         try:
             from langchain.chat_models import init_chat_model
 
@@ -66,6 +72,10 @@ class _Session:
             )
         except Exception:
             raise ModelUnavailable() from None
+
+    @property
+    def model_info(self) -> dict[str, str]:
+        return self.__model_info.copy()
 
     def complete(self, prompt: str) -> str:
         try:
