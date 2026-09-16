@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from importlib import import_module
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from threading import RLock
@@ -154,6 +155,19 @@ class Models:
 
     def __init__(self, config_path: Path | None = None) -> None:
         self._path = Path(config_path) if config_path is not None else None
+
+    def prepare(self) -> None:
+        """Load supported SDKs without reading model settings or creating clients."""
+        try:
+            for module in (
+                "langchain.chat_models", "langchain_openai", "langchain_deepseek",
+                "openai.resources.chat",
+            ):
+                import_module(module)
+            # The messages package also exposes its classes through lazy attributes.
+            getattr(import_module("langchain_core.messages"), "HumanMessage")
+        except Exception:
+            raise ModelUnavailable() from None
 
     def _config_path(self) -> Path:
         return self._path if self._path is not None else Path(os.getenv("LLM_CONFIG_FILE", _DEFAULT_CONFIG_PATH))

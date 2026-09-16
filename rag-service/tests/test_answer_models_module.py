@@ -2,6 +2,8 @@
 
 import json
 import os
+import socket
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Event
@@ -450,7 +452,8 @@ def test_session_model_info_uses_the_environment_read_before_client_creation(tmp
     assert next_session.complete("next question") == "changed-environment-model"
 
 
-def test_concurrent_save_only_changes_the_next_session(tmp_path, monkeypatch):
+@pytest.mark.parametrize("prepared", [False, True])
+def test_concurrent_save_only_changes_the_next_session(tmp_path, monkeypatch, prepared):
     started = Event()
     release = Event()
     created = []
@@ -469,6 +472,8 @@ def test_concurrent_save_only_changes_the_next_session(tmp_path, monkeypatch):
 
     monkeypatch.setattr("langchain.chat_models.init_chat_model", create_client)
     models = answer_models.Models(config_path=tmp_path / "llm.json")
+    if prepared:
+        models.prepare()
     session = models.open_session()
 
     with ThreadPoolExecutor(max_workers=1) as pool:
@@ -587,6 +592,7 @@ def test_real_sdk_session_uses_configured_provider_and_effective_endpoint(tmp_pa
 
     monkeypatch.setattr(httpx2.Client, "send", send_response)
     models = answer_models.Models(config_path=tmp_path / "llm.json")
+    models.prepare()
     saved = models.save(update(provider=provider, base_url=models.get()["base_url"]))
     monkeypatch.setenv(variable, "https://changed.example.test/v1")
 
@@ -621,3 +627,74 @@ def test_sdk_failure_does_not_retry_or_expose_upstream_details(tmp_path, monkeyp
     assert str(failed.value) == "answer model is unavailable"
     assert failed.value.__cause__ is None
     assert len(requests) == 1
+
+
+@pytest.mark.parametrize("configuration", ["missing", "corrupt"])
+def test_prepare_needs_no_settings_and_creates_no_client(tmp_path, monkeypatch, configuration):
+    path = tmp_path / "llm.json"
+    monkeypatch.delenv("LLM_MODEL")
+    monkeypatch.delenv("LLM_API_KEY")
+    if configuration == "corrupt":
+        path.write_bytes(b'{"api_key":"private-corrupt-key"')
+        (tmp_path / ".env").write_bytes(b"LLM_API_KEY=private-dotenv-key\xff")
+
+    def unexpected_client(*_args, **_options):
+        pytest.fail("SDK preparation must not construct a model or HTTP client")
+
+    monkeypatch.setattr("langchain.chat_models.init_chat_model", unexpected_client)
+    monkeypatch.setattr(httpx2.Client, "__init__", unexpected_client)
+    monkeypatch.setattr(httpx2.AsyncClient, "__init__", unexpected_client)
+    monkeypatch.setattr(socket.socket, "connect", unexpected_client)
+    monkeypatch.setattr(socket, "getaddrinfo", unexpected_client)
+    models = answer_models.Models(config_path=path)
+
+    assert models.prepare() is None
+    assert models.prepare() is None
+
+    if configuration == "corrupt":
+        assert path.read_bytes() == b'{"api_key":"private-corrupt-key"'
+    else:
+        assert not path.exists()
+
+
+def test_prepare_does_not_freeze_configuration_before_the_first_question(tmp_path, monkeypatch):
+    models = answer_models.Models(config_path=tmp_path / "llm.json")
+    models.prepare()
+    models.save(update(provider="deepseek", base_url="https://next.example.test/v1", api_key="private-next-key"))
+    created = []
+
+    def create_client(model, **options):
+        created.append((model, options))
+        return SimpleNamespace(invoke=lambda _messages: SimpleNamespace(content=model))
+
+    monkeypatch.setattr("langchain.chat_models.init_chat_model", create_client)
+    session = models.open_session()
+
+    assert session.model_info == {"provider": "deepseek", "model": "saved-model"}
+    assert created[0][1]["api_key"] == "private-next-key"
+    assert created[0][1]["base_url"] == "https://next.example.test/v1"
+    assert session.complete("question") == "saved-model"
+
+
+@pytest.mark.parametrize("unavailable_module", [
+    "langchain.chat_models", "langchain_openai", "langchain_deepseek", "openai.resources.chat",
+])
+def test_prepare_failure_is_sanitized_and_a_later_attempt_can_succeed(tmp_path, monkeypatch, unavailable_module):
+    models = answer_models.Models(config_path=tmp_path / "llm.json")
+    with monkeypatch.context() as missing_dependency:
+        missing_dependency.setitem(sys.modules, unavailable_module, None)
+        with pytest.raises(answer_models.ModelUnavailable) as failed:
+            models.prepare()
+
+        assert failed.value.code == "LLM_UNAVAILABLE"
+        assert str(failed.value) == "answer model is unavailable"
+        assert failed.value.__cause__ is None
+        assert failed.value.__suppress_context__
+        assert models.get()["configured"] is True
+        assert models.save(update())["configured"] is True
+        assert models.reset()["configured"] is True
+        if unavailable_module == "langchain_deepseek":
+            assert models.open_session().model_info["provider"] == "openai"
+
+    assert models.prepare() is None
+    assert models.open_session().model_info == {"provider": "openai", "model": "environment-model"}

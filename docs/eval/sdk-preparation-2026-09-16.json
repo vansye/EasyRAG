@@ -1,0 +1,276 @@
+{
+  "time_utc": "2026-09-16T14:41:24.169246+00:00",
+  "python": "3.14.6",
+  "platform": "win32",
+  "packages": {
+    "langchain": "1.3.17",
+    "langchain-openai": "1.6.0",
+    "langchain-deepseek": "1.1.0",
+    "openai": "3.8.0"
+  },
+  "network_attempts": 0,
+  "samples": [
+    {
+      "mode": "cold",
+      "provider": "openai",
+      "application_import_ms": 12088.181,
+      "prepare_ms": null,
+      "first_session_ms": 61526.747,
+      "warm_session_ms": [
+        2.967,
+        2.756,
+        23.627,
+        3.177
+      ],
+      "network_attempts": 0
+    },
+    {
+      "mode": "prepared",
+      "provider": "openai",
+      "application_import_ms": 18626.61,
+      "prepare_ms": 35447.977,
+      "first_session_ms": 606.926,
+      "warm_session_ms": [
+        1.733,
+        1.753,
+        4.302,
+        1.113
+      ],
+      "network_attempts": 0
+    },
+    {
+      "mode": "cold",
+      "provider": "deepseek",
+      "application_import_ms": 23923.533,
+      "prepare_ms": null,
+      "first_session_ms": 12740.977,
+      "warm_session_ms": [
+        8.597,
+        7.219,
+        3.783,
+        6.803
+      ],
+      "network_attempts": 0
+    },
+    {
+      "mode": "prepared",
+      "provider": "deepseek",
+      "application_import_ms": 2413.004,
+      "prepare_ms": 6877.432,
+      "first_session_ms": 348.098,
+      "warm_session_ms": [
+        8.259,
+        13.683,
+        13.809,
+        34.654
+      ],
+      "network_attempts": 0
+    },
+    {
+      "mode": "prepared",
+      "provider": "openai",
+      "application_import_ms": 18074.403,
+      "prepare_ms": 4254.425,
+      "first_session_ms": 107.989,
+      "warm_session_ms": [
+        1.027,
+        1.397,
+        0.52,
+        0.529
+      ],
+      "network_attempts": 0
+    },
+    {
+      "mode": "cold",
+      "provider": "openai",
+      "application_import_ms": 2095.561,
+      "prepare_ms": null,
+      "first_session_ms": 4276.318,
+      "warm_session_ms": [
+        3.146,
+        1.782,
+        1.916,
+        1.285
+      ],
+      "network_attempts": 0
+    },
+    {
+      "mode": "prepared",
+      "provider": "deepseek",
+      "application_import_ms": 2052.084,
+      "prepare_ms": 4303.264,
+      "first_session_ms": 85.359,
+      "warm_session_ms": [
+        4.249,
+        3.518,
+        2.97,
+        3.565
+      ],
+      "network_attempts": 0
+    },
+    {
+      "mode": "cold",
+      "provider": "deepseek",
+      "application_import_ms": 2099.639,
+      "prepare_ms": null,
+      "first_session_ms": 4470.06,
+      "warm_session_ms": [
+        6.082,
+        4.121,
+        5.646,
+        3.223
+      ],
+      "network_attempts": 0
+    },
+    {
+      "mode": "cold",
+      "provider": "openai",
+      "application_import_ms": 2134.662,
+      "prepare_ms": null,
+      "first_session_ms": 4201.76,
+      "warm_session_ms": [
+        2.546,
+        1.226,
+        1.033,
+        0.628
+      ],
+      "network_attempts": 0
+    },
+    {
+      "mode": "prepared",
+      "provider": "openai",
+      "application_import_ms": 2062.858,
+      "prepare_ms": 4041.63,
+      "first_session_ms": 135.173,
+      "warm_session_ms": [
+        1.102,
+        0.681,
+        0.497,
+        0.495
+      ],
+      "network_attempts": 0
+    },
+    {
+      "mode": "cold",
+      "provider": "deepseek",
+      "application_import_ms": 2257.977,
+      "prepare_ms": null,
+      "first_session_ms": 4341.299,
+      "warm_session_ms": [
+        6.516,
+        3.72,
+        2.945,
+        2.722
+      ],
+      "network_attempts": 0
+    },
+    {
+      "mode": "prepared",
+      "provider": "deepseek",
+      "application_import_ms": 2333.328,
+      "prepare_ms": 18813.64,
+      "first_session_ms": 988.838,
+      "warm_session_ms": [
+        46.792,
+        86.376,
+        38.465,
+        93.056
+      ],
+      "network_attempts": 0
+    }
+  ],
+  "summary": [
+    {
+      "provider": "openai",
+      "mode": "cold",
+      "samples": 3,
+      "application_import_ms": {
+        "median": 2134.662,
+        "min": 2095.561,
+        "max": 12088.181
+      },
+      "prepare_ms": null,
+      "first_session_ms": {
+        "median": 4276.318,
+        "min": 4201.76,
+        "max": 61526.747
+      },
+      "warm_session_ms": {
+        "median": 2.231,
+        "min": 0.628,
+        "max": 23.627
+      }
+    },
+    {
+      "provider": "openai",
+      "mode": "prepared",
+      "samples": 3,
+      "application_import_ms": {
+        "median": 18074.403,
+        "min": 2062.858,
+        "max": 18626.61
+      },
+      "prepare_ms": {
+        "median": 4254.425,
+        "min": 4041.63,
+        "max": 35447.977
+      },
+      "first_session_ms": {
+        "median": 135.173,
+        "min": 107.989,
+        "max": 606.926
+      },
+      "warm_session_ms": {
+        "median": 1.065,
+        "min": 0.495,
+        "max": 4.302
+      }
+    },
+    {
+      "provider": "deepseek",
+      "mode": "cold",
+      "samples": 3,
+      "application_import_ms": {
+        "median": 2257.977,
+        "min": 2099.639,
+        "max": 23923.533
+      },
+      "prepare_ms": null,
+      "first_session_ms": {
+        "median": 4470.06,
+        "min": 4341.299,
+        "max": 12740.977
+      },
+      "warm_session_ms": {
+        "median": 4.883,
+        "min": 2.722,
+        "max": 8.597
+      }
+    },
+    {
+      "provider": "deepseek",
+      "mode": "prepared",
+      "samples": 3,
+      "application_import_ms": {
+        "median": 2333.328,
+        "min": 2052.084,
+        "max": 2413.004
+      },
+      "prepare_ms": {
+        "median": 6877.432,
+        "min": 4303.264,
+        "max": 18813.64
+      },
+      "first_session_ms": {
+        "median": 348.098,
+        "min": 85.359,
+        "max": 988.838
+      },
+      "warm_session_ms": {
+        "median": 13.746,
+        "min": 2.97,
+        "max": 93.056
+      }
+    }
+  ]
+}

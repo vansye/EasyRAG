@@ -85,6 +85,7 @@ AnswerDraft = {answer, status, chunk_ids, trace}
 Qa.answer(question, search, chat, top_k=5) -> AnswerDraft
 
 # F 只返回公开配置或封装后的会话，密钥和 SDK 不出模块。
+Models.prepare() -> None  # 启动阶段加载本地 SDK，不读项目模型配置、不创建客户端或发请求
 Models.get() -> PublicConfig
 Models.save(update) -> PublicConfig
 Models.reset() -> PublicConfig
@@ -103,6 +104,8 @@ ChatSession.complete(prompt) -> str
 多个查询共享许可，索引变更独占许可。状态转换用短锁，业务许可可以跨线程移交，不能持有实际线程锁跨线程。后台执行器为单线程；遇忙保持 PENDING，由手动 ready 重提，不阻塞等待 READY。客户端断开不能结束仍在运行的工作。所有同步 HTTP 工作都在实际线程内登记；停机先停止接收工作，等待 HTTP 线程、索引执行器和许可全部结束，再关闭 B/A 资源，最后释放进程锁。
 
 模型失败不阻断资料浏览和配置。Chroma 失败时资料浏览/收录仍可用，新资料停在 PENDING。A 只处理自己的数据库异常；B 维护自身部分索引清理；G 根据公开结果决定跨模块恢复状态。
+
+M4 的 SDK 准备由 `Services.create()` 在移交资源前调用 F 的 `prepare()`，沿用上述进程锁和取消清理边界。SDK 导入失败只记录安全分类，不改变门禁状态；不缓存项目配置或客户端，`open_session()` 保留按 provider 懒加载。准备转移首次导入成本，具体约束与测量口径见 [M4 方案](m4-retrieval-and-history-plan-2026-09-15.md)。
 
 ## 兼容与恢复
 
