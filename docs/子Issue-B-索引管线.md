@@ -31,6 +31,14 @@ close() -> None
 
 实现见 [PR #41](https://github.com/vansye/EasyRAG/pull/41)、[保留回归 #48](https://github.com/vansye/EasyRAG/pull/48)、[真实恢复 #54](https://github.com/vansye/EasyRAG/pull/54)。collection 的 document 载荷为原文正文，标题只影响 embedding 输入并保留在 metadata；非空 tags 使用字符串数组。本次没有切换检索算法或重新声称召回提升。
 
+### 当前切片产出契约（2026-09-15 修订）
+
+B 的切分和相邻小片段合并同时检查两种容量：完整 embedding 输入的 token 预算，以及切片正文 65,535 个 UTF-8 字节的存储上限。`heading_path` 元数据取标题路径的前 512 个 Unicode 码点，再参与 token 计数；原文中的完整标题、正文和 UTF-8 定位不变。预算仍包含特殊 token；若单个正文字符与标题路径已经无法放入 token 预算，继续明确失败，不按 token 数再次裁短标题。
+
+B 不产生纯空白切片。因此首尾或切片间可能存在纯空白间隙，但每个非空白字符必须保留，每个切片仍是原文中的精确子串。`document.content` 是完整原文入口；直接拼接切片可能缺少这些空白间隙。A 按相同约定验证范围、文本和字段上限，完整格式见 [公共 API](api.md#资料与切片)。
+
+本节取代下方历史记录中“切片连续覆盖每个原文字节”的要求。没有改变索引真相源、查询算法或数据库列类型；模块之间仍只由 G 适配公开数据。跨模块回归同时覆盖超长标题、稀疏 token 的超长正文、Unicode 空白、实际入库及重建 ID 复用。
+
 ## 历史实现与契约：内部 HTTP 阶段
 
 > 父 Issue：#1 总功能文档
