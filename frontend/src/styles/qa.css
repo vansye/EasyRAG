@@ -105,8 +105,8 @@
 .citations-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 13px; }
 .citations-heading h3 { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--muted); }
 .citations-heading > span { color: var(--muted); font-size: 12px; }
-.citation-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.source-card { background: #fff; border: 1px solid #e1e9d8; border-radius: 8px; padding: 16px; transition: border-color .2s, box-shadow .2s; }
+.citation-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.source-card { min-width: 0; background: #fff; border: 1px solid #e1e9d8; border-radius: 8px; padding: 16px; transition: border-color .2s, box-shadow .2s; }
 .source-card.is-highlighted { border-color: #a6bc8b; box-shadow: 0 0 0 3px #d7e5c644; }
 .source-card-header { display: flex; align-items: center; gap: 7px; }
 .citation-number { display: grid; place-items: center; width: 19px; height: 20px; background: #f0f5e8; color: var(--muted); font-size: 12px; border-radius: 4px; flex-shrink: 0; }
@@ -114,7 +114,7 @@
 .source-title:hover { text-decoration: underline; text-underline-offset: 3px; }
 .source-card-header > svg { color: #b4bfa5; }
 .source-heading-path { color: var(--muted); font-size: 12px; margin: 10px 0 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.source-excerpt { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; color: var(--muted); font-size: 12px; line-height: 1.9; margin-top: 9px; white-space: pre-wrap; }
+.source-excerpt { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; color: var(--muted); font-size: 12px; line-height: 1.9; margin-top: 9px; white-space: pre-wrap; }
 .source-open { display: flex; align-items: center; gap: 5px; color: var(--muted); background: transparent; border: 0; padding: 0; margin: 12px 0 0 auto; font-size: 12px; }
 .source-open:hover { color: var(--brand); }
 .trace-details { margin-top: 25px; border-top: 1px solid #e0e8d6; border-bottom: 1px solid #e0e8d6; }
@@ -236,7 +236,7 @@
   .answer-body { font-size: 14px; line-height: 2; }
   .answer-bottomline { gap: 10px; }
   .answer-model { max-width: 125px; font-size: 12px; }
-  .citation-grid { grid-template-columns: 1fr; }
+  .citation-grid { grid-template-columns: minmax(0, 1fr); }
   .source-excerpt { font-size: 13px; }
   .source-title { font-size: 12px; }
   .source-open { font-size: 12px; }

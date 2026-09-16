@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:browser": "node tests/browser-smoke.mjs",
     "test:browser:models": "node tests/browser-model-settings.mjs",
+    "test:browser:layout": "node tests/browser-question-layout.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
