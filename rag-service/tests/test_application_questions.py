@@ -2,6 +2,8 @@
 
 from dataclasses import asdict
 from datetime import datetime
+import json
+import logging
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -161,4 +163,105 @@ def test_empty_evidence_saves_a_refusal_without_any_model_completion(workflow):
     w.a.sources.assert_not_called()
     w.a.save_history.assert_called_once()
     assert w.a.save_history.call_args.args[0].status == 'REFUSED'
+    assert w.gate.state == State.READY
+
+
+def _timing_reports(caplog):
+    return [json.loads(record.getMessage().removeprefix('question_timing '))
+            for record in caplog.records if record.getMessage().startswith('question_timing ')]
+
+
+def test_stage_timing_includes_history_commit_and_isolates_each_question(workflow,monkeypatch,caplog):
+    w=workflow
+    now=[10.0]
+    monkeypatch.setattr('app.application.questions.perf_counter',lambda:now[0])
+    monkeypatch.setattr('app.modules.qa.public.perf_counter',lambda:now[0],raising=False)
+    calls=[0]
+    def session():
+        now[0]+=0.125
+        return w.session
+    def search(query,top_k=5,*,record_timing=None):
+        for stage,duration in [('vector',0.025),('embedding',0.25),('vector',0.05)]:
+            now[0]+=duration
+            if record_timing:
+                record_timing(stage,duration*1000)
+        return w.b.search.return_value
+    def complete(prompt):
+        index=calls[0]%2
+        calls[0]+=1
+        now[0]+=[0.5,1.5][index]
+        return ['{"verdict":"SUFFICIENT"}','First [1], second [2].'][index]
+    def sources(chunk_ids):
+        now[0]+=0.05
+        return w.sources
+    def save(record):
+        now[0]+=0.1
+        return SimpleNamespace(id=41,created_at=datetime(2026,9,15,12,30))
+    w.models.open_session.side_effect=session
+    w.b.search.side_effect=search
+    w.session.complete.side_effect=complete
+    w.a.sources.side_effect=sources
+    w.a.save_history.side_effect=save
+    with caplog.at_level(logging.INFO,logger='app.application.questions'):
+        for _ in range(2):
+            result=w.questions.ask('private question containing private-api-key')
+            assert result.elapsed_ms == pytest.approx(2500,abs=1)
+    reports=_timing_reports(caplog)
+    assert len(reports) == 2
+    for report in reports:
+        assert report['status'] == 'ANSWERED'
+        assert report['failed_stage'] is None
+        assert {key:report[key] for key in (
+            'session_ms','embedding_ms','vector_ms','judge_ms','generate_ms','sources_ms','history_ms','total_ms'
+        )} == pytest.approx(dict(session_ms=125,embedding_ms=250,vector_ms=75,judge_ms=500,
+                               generate_ms=1500,sources_ms=50,history_ms=100,total_ms=2600))
+    assert 'private' not in caplog.text
+    assert w.session.complete.call_count == 4
+
+
+def test_empty_evidence_timing_marks_skipped_stages_without_inventing_model_work(workflow,caplog):
+    w=workflow
+    w.b.search.return_value=()
+    with caplog.at_level(logging.INFO,logger='app.application.questions'):
+        w.questions.ask('private question')
+    reports=_timing_reports(caplog)
+    assert len(reports) == 1
+    report=reports[0]
+    assert report['status'] == 'REFUSED'
+    assert report['judge_ms'] is report['generate_ms'] is report['sources_ms'] is None
+    assert report['history_ms'] >= 0 and report['total_ms'] >= report['history_ms']
+    w.session.complete.assert_not_called()
+
+
+@pytest.mark.parametrize('stage',['judge','generate','sources','history'])
+def test_failed_question_records_timing_and_releases_admission(workflow,monkeypatch,caplog,stage):
+    w=workflow
+    now=[10.0]
+    monkeypatch.setattr('app.application.questions.perf_counter',lambda:now[0])
+    monkeypatch.setattr('app.modules.qa.public.perf_counter',lambda:now[0],raising=False)
+    def fail(*args):
+        now[0]+=0.25
+        if stage in ('judge','generate'):
+            raise RuntimeError('private provider body and private-api-key')
+        raise DatabaseUnavailable('private SQL body')
+    if stage in ('judge','generate'):
+        if stage == 'generate':
+            def complete(prompt):
+                if w.session.complete.call_count == 1:
+                    return '{"verdict":"SUFFICIENT"}'
+                return fail()
+            w.session.complete.side_effect=complete
+        else:
+            w.session.complete.side_effect=fail
+    else:
+        getattr(w.a,'sources' if stage == 'sources' else 'save_history').side_effect=fail
+    with caplog.at_level(logging.INFO,logger='app.application.questions'):
+        with pytest.raises(QuestionFailed):
+            w.questions.ask('private question')
+    reports=_timing_reports(caplog)
+    assert len(reports) == 1
+    report=reports[0]
+    assert report['status'] == 'FAILED' and report['failed_stage'] == stage
+    assert report[f'{stage}_ms'] == 250 and report['total_ms'] == 250
+    assert 'private' not in caplog.text
     assert w.gate.state == State.READY

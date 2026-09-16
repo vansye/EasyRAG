@@ -157,6 +157,23 @@
 
 `history_id` 标识本次保存的独立记录。`model` 只包含实际执行本次问答的 `provider/model`，来自同一个冻结会话，不含地址或凭据。`elapsed_ms` 从服务端创建会话前计时，到回答与来源准备完成为止，不包含历史写库和网络传输。`created_at` 是数据库保存时间，沿用资料时间的 Asia/Shanghai 无偏移 ISO 格式。
 
+### 阶段耗时日志
+
+通过 `python -m app` 启动时，每次获准执行的问答在结束时输出一条 `INFO app.application.questions question_timing {...}`。日志独立于 HTTP 响应和历史 schema，用于比较实际瓶颈；参数校验失败或门禁拒绝的请求没有执行阶段日志。
+
+| 字段 | 计时边界 |
+|---|---|
+| `session_ms` | 创建本问冻结模型会话 |
+| `embedding_ms` | 问题 embedding 调用 |
+| `vector_ms` | embedding 前的索引探测与随后的向量查询，累加且不包含 embedding |
+| `judge_ms` / `generate_ms` | 各自模型调用 |
+| `sources_ms` | 查找当次来源 |
+| `history_ms` | 保存完成历史，包括提交 |
+| `total_ms` | 创建会话前至历史提交或失败处理结束，包含应用编排 |
+| `status` / `failed_stage` | `ANSWERED / PARTIAL / REFUSED / FAILED`；成功时失败阶段为 `null` |
+
+未执行的阶段为 `null`，异常调用仍计入已消耗时间。`failed_stage` 区分 `session/search/judge/generate/sources/history`，检索内部耗时由 embedding/vector 两字段定位。日志不含问题、答案、来源正文、服务地址或凭据；`total_ms` 不包含网络传输与浏览器渲染，不能当作用户看到完整答案的时间。原 `elapsed_ms` 仍截止历史保存前。
+
 ## 问答历史
 
 `GET /api/question-history` 使用上面的 `page/size` 规则，按 `created_at` 降序、`id` 降序返回摘要。列表不加载答案、来源和 trace，示例：
