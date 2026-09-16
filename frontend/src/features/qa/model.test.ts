@@ -1,7 +1,10 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import type { AnsweredQuestion, ChunkSource } from '@/shared/api/types'
 import { presentAnswer } from './model'
+
+const citationCases = JSON.parse(readFileSync(new URL('../../../../rag-service/tests/contracts/answer-citations.json', import.meta.url), 'utf8')) as { id: string; answer: string; numbers: number[] }[]
 
 function source(id: number): ChunkSource {
   return { chunk_id: id, document_id: id, title: `资料 ${id}`, text: `原文 ${id}`, byte_start: 0, byte_end: 8, heading_path: '说明' }
@@ -19,6 +22,10 @@ function result(answer: string): AnsweredQuestion {
 }
 
 describe('answer citations', () => {
+  it.each(citationCases)('shares the backend prose citation rules: $id', (testCase) => {
+    expect(presentAnswer(result(testCase.answer)).citations.map((citation) => citation.number)).toEqual(testCase.numbers)
+  })
+
   it('resolves citation numbers by retrieval rank, not the order of sources', () => {
     const view = presentAnswer(result('第一项 [1]，第二项 [2]。'))
     expect(view.citations.map((citation) => citation.source.chunk_id)).toEqual([9, 2])

@@ -115,7 +115,7 @@ def test_partial_keeps_one_search_and_the_original_boundary_instruction():
 
 
 @pytest.mark.parametrize("has_evidence", [False, True])
-def test_none_is_judged_and_refused_without_generation(has_evidence):
+def test_none_refuses_without_generation_and_only_judges_nonempty_evidence(has_evidence):
     evidence = _evidence() if has_evidence else ()
     search = _FixedSearch(evidence)
     chat = _ScriptedChat('{"verdict": "NONE"}')
@@ -125,8 +125,9 @@ def test_none_is_judged_and_refused_without_generation(has_evidence):
     assert draft.status == "REFUSED"
     assert draft.answer == "知识库中没有找到能回答这个问题的内容。"
     assert draft.chunk_ids == ()
-    assert len(chat.prompts) == 1
-    assert "判定规则：" in chat.prompts[0]
+    assert len(chat.prompts) == (1 if has_evidence else 0)
+    if has_evidence:
+        assert "判定规则：" in chat.prompts[0]
     assert len(draft.trace) == 1
     assert draft.trace[0].decision == "NONE"
     assert tuple(hit.chunk_id for hit in draft.trace[0].retrieved) == tuple(
@@ -243,7 +244,7 @@ def test_public_question_validation_matches_answer_before_port_calls(question, m
 
 def test_question_limit_counts_code_points_and_preserves_valid_input():
     question = " " + "😀" * 1998 + " "
-    search = _FixedSearch(())
+    search = _FixedSearch(_evidence())
     chat = _ScriptedChat('{"verdict": "NONE"}')
 
     assert qa.validate_question(question) is None

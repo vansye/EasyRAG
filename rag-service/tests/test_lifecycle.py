@@ -15,7 +15,7 @@ from app.application.runtime import RuntimeSettings, Services
 from app.http import create_app
 from app.modules.answer_models.public import Models
 from app.modules.knowledge.public import Knowledge
-from app.modules.retrieval.public import Retrieval
+from app.modules.retrieval.public import Retrieval, SearchHit
 
 
 @pytest.mark.parametrize('operation', ['question', 'upload'])
@@ -36,7 +36,7 @@ def test_cancelled_worker_finishes_before_resources_close_and_lock_releases(tmp_
             block()
             return '{"verdict":"NONE"}'
         models.open_session.return_value.complete.side_effect = complete
-        b.search.return_value = ()
+        b.search.return_value = (SearchHit(1, 1, 'Unrelated evidence', '', 0.1),)
     else:
         def create(_filename, _data):
             block()

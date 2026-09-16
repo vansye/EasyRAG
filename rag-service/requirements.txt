@@ -37,5 +37,8 @@ langchain-deepseek==1.1.0
 openai==3.8.0
 httpx2==2.12.0
 
+# --- 与前端 Markdown 语义一致的正文引用校验 ---
+markdown-it-py==4.2.0
+
 # --- 测试 ---
 pytest==9.1.1
