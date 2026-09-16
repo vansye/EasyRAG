@@ -2,7 +2,7 @@
 
 **2026-09-16 实施对齐**
 
-本次按总 Issue [#1](https://github.com/vansye/EasyRAG/issues/1) 先修复问答历史与出处布局，再实施优先级 1。问答历史首版已发布为 [#61](https://github.com/vansye/EasyRAG/pull/61)，UI 修复为 [#62](https://github.com/vansye/EasyRAG/pull/62)，回答约束与计时为 [#63](https://github.com/vansye/EasyRAG/pull/63) / [#64](https://github.com/vansye/EasyRAG/pull/64)；前置切片与竞态修复分别为 #59 / #60。下文的“尚未修改”“实施草案”和实验数字均保留为 9 月 15 日的历史记录，不能当作当前交付状态。SDK 准备、流式、回答压缩及检索对照仍为后续步骤。
+本次按总 Issue [#1](https://github.com/vansye/EasyRAG/issues/1) 先修复问答历史与出处布局，再实施优先级 1。问答历史首版为 [#61](https://github.com/vansye/EasyRAG/pull/61)，UI 修复为 [#62](https://github.com/vansye/EasyRAG/pull/62)，回答约束与计时为 [#63](https://github.com/vansye/EasyRAG/pull/63) / [#64](https://github.com/vansye/EasyRAG/pull/64)；前置切片与竞态修复分别为 #59 / #60。六个 PR 已按依赖顺序合入 main，合入后的 [CI](https://github.com/vansye/EasyRAG/actions/runs/35106494546) 通过。下文的“尚未修改”“实施草案”和实验数字均保留为 9 月 15 日的历史记录，不能当作当前交付状态。优先级 2 的 SDK 准备按下方契约实施；流式、回答压缩及检索对照仍为后续步骤。
 
 优先级 1 的实施契约（C #27、B #3、G #36，评估口径 D #37）：
 
@@ -15,6 +15,15 @@
 交付按功能区分：UI 布局与浏览器 CI、C 回答约束、B/C/G 计时。功能 PR 引用对应模块 Issue，不提前关闭整个模块；检索改进阶段仍必须报告前后评估数字，不能把本阶段的规则修复称为 hit@k 提升。
 
 本阶段的代码、验证结果、文件影响与 PR / CI 见 [M4 进度记录](m4-progress-2026-09-16.md)。引用兼容性由 50 组共享样例覆盖；Markdown 结构使用 markdown-it，自动链接规则对齐锁定的 marked 18.0.13，不宣称两个解析器的全部语法等价。发布复审补齐了 NEL / BOM 差异，引用匹配和数字转换统一使用 JavaScript 空白集合。升级 marked 时须核对 URL 规则并运行共享样例。
+
+**优先级 2 实施细化：本地 SDK 准备（F #35 / G #36）**
+
+- F 增加 `Models.prepare()`，只加载两种已支持 provider 所需的 SDK 公共模块及消息类。除 LangChain 与 provider 包外，显式预载 `openai.resources.chat`：两种 provider 在构造客户端时都会访问 `chat.completions`，而 OpenAI SDK 把这部分留到属性首次读取时导入，仅加载 provider 包无法移走全部导入成本。
+- 准备不读取项目模型配置、地址或凭据，不创建模型/HTTP 客户端，不调用生成、不发送网络请求。第三方导入仍会读取安装包元数据、SDK 日志环境变量和 CA 文件；不把它描述成零文件或零环境读取。
+- G 在 `Services.create()` 内、资源所有权转交之前调用准备；既有 lifespan 在持有进程锁的工作线程中等待构造完成，再接收 HTTP 请求。取消仍须等工作线程结束和资源清理，不新增后台任务或就绪状态。
+- F 把导入失败转换为 `ModelUnavailable`；G 只记录安全错误分类并继续提供配置和资料管理。`open_session()` 保留自身按需加载路径，一个 provider 预载失败不会强制其他 provider 跟着失败。模型配置继续是提问时的条件，不是服务启动条件。
+- 准备不保存配置或客户端，不增加“已准备”标记；重复调用依靠 Python 模块缓存。每问仍在 `open_session()` 冻结当前配置，判定和生成复用本问会话，后续问题使用新配置。
+- 验证独立进程中的网络尝试为 0，并分别报告新增启动准备、首会话和热会话耗时。准备转移的是本地初始化成本，不宣称减少总启动成本、生成耗时或提高召回率；耗时不作为易波动的 CI 阈值。
 
 ---
 

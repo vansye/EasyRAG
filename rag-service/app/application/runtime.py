@@ -1,13 +1,14 @@
 """Composition root; resources close only after all admitted work finishes."""
 
 from contextlib import ExitStack, contextmanager
+import logging
 from pathlib import Path
 from threading import Condition
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from app.modules.answer_models.public import Models
+from app.modules.answer_models.public import ModelUnavailable, Models
 from app.modules.knowledge.public import Knowledge
 from app.modules.retrieval.public import Retrieval
 
@@ -20,6 +21,7 @@ from .recovery import Readiness
 
 
 SERVICE_DIR = Path(__file__).resolve().parents[2]
+logger = logging.getLogger(__name__)
 
 
 class RuntimeSettings(BaseSettings):
@@ -53,7 +55,12 @@ class Services:
             cleanup.callback(knowledge.close)
             retrieval = Retrieval()
             cleanup.callback(retrieval.close)
-            services = cls(knowledge,retrieval,Models())
+            models = Models()
+            try:
+                models.prepare()
+            except ModelUnavailable as failure:
+                logger.warning('answer_model_sdk_prepare_failed code=%s', failure.code)
+            services = cls(knowledge,retrieval,models)
             cleanup.pop_all()
             return services
 

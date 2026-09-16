@@ -42,7 +42,7 @@ rag-service/app/modules/
   qa/                           判定、生成、拒答、trace，注入检索和模型端口
   answer_models/                配置、凭据、厂商 SDK、单问题会话
 rag-service/app/maintenance.py   独占维护 CLI
-rag-service/scripts/            离线检索评估
+rag-service/scripts/            离线检索评估、本地 SDK 准备测量
 rag-service/tests/              模块、应用、HTTP、隔离 MySQL 集成测试
 docs/                           设计、Issue 底稿、黄金集与评估报告
 sample-knowledge/               29 篇样例语料
@@ -103,6 +103,8 @@ npm run dev -- --host 127.0.0.1 --port 5173
 网页「知识问答 → 模型 → 配置回答模型」可保存服务类型、接口地址、模型名与 API Key。配置保存在忽略入库的 `rag-service/config/llm.json`，或 `LLM_CONFIG_FILE` 指定路径。密钥不回传，留空仅在接口地址和服务类型不变时沿用。
 
 每个问题固定一个会话；配置修改从下一次问题生效，切换回答模型不重建向量。「恢复启动配置」移除本机覆盖文件，重新读取环境变量 / `.env`。启动配置使用 `LLM_PROVIDER`、`LLM_MODEL`、`LLM_BASE_URL`、`LLM_API_KEY`、`LLM_TIMEOUT_SECONDS`，示例见 [.env.example](rag-service/.env.example)。
+
+后端在开始接收请求前准备本地 SDK 依赖，不要求配置回答模型，也不发送生成预热。导入失败会记录安全告警，配置和资料管理仍可使用。此步骤把首次 SDK 导入等待移到启动阶段；客户端仍按每问配置构造。可在 `rag-service` 执行 `python scripts/benchmark_sdk_preparation.py --samples 3 --output data/sdk-preparation.json` 重测独立进程中的准备、首会话及热会话耗时；脚本使用临时目录和合成配置，并阻止网络访问。结果口径见 [M4 进度](docs/m4-progress-2026-09-16.md)。
 
 ## 问答历史
 
