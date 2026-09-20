@@ -27,7 +27,7 @@ def chat_server(monkeypatch):
         monkeypatch.setenv(name, 'false')
     monkeypatch.setenv('LLM_MODEL', '')
     monkeypatch.setenv('LLM_API_KEY', '')
-    state = SimpleNamespace(calls=[], after_judge=None, fail=False, verdict=None)
+    state = SimpleNamespace(calls=[], after_judge=None, fail=False, verdict=None, stream_answer=None)
 
     class Handler(BaseHTTPRequestHandler):
         timeout = 3
@@ -58,6 +58,20 @@ def chat_server(monkeypatch):
                     'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': answer}, 'finish_reason': 'stop'}],
                     'usage': {'prompt_tokens': 1, 'completion_tokens': 1, 'total_tokens': 2},
                 }
+            if payload.get('stream') and status == 200:
+                text = state.stream_answer if state.stream_answer is not None else answer
+                chunks = []
+                for part in (text[:3], text[3:]):
+                    chunk = {'id':'stream-contract','object':'chat.completion.chunk','created':1,
+                             'model':payload['model'],'choices':[{'index':0,'delta':{'content':part},'finish_reason':None}]}
+                    chunks.append('data: ' + json.dumps(chunk) + '\n\n')
+                data = (''.join(chunks) + 'data: [DONE]\n\n').encode('utf-8')
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/event-stream')
+                self.send_header('Content-Length', str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
             data = json.dumps(body).encode('utf-8')
             self.send_response(status)
             self.send_header('Content-Type', 'application/json')
@@ -111,6 +125,43 @@ def configure(workspace, model):
     })
     assert response.status_code == 200 and response.headers['cache-control'] == 'no-store'
     assert 'contract-test-key' not in response.text
+
+
+@pytest.mark.parametrize('failure', [None, 'citations', 'history'])
+def test_stream_uses_real_model_http_and_only_commits_valid_history(workspace, monkeypatch, failure):
+    from app.modules.knowledge.public import DatabaseUnavailable
+    w = workspace
+    assert w.client.post('/api/admin/ready').status_code == 200
+    configure(w, 'stream-model')
+    created = w.client.post('/api/documents', files={'file': ('stream.md', '# 阅读活动\n\n报名口令是白鹭3718。'.encode())})
+    assert created.status_code == 201
+    indexed(w)
+    before = source_truth(w.storage.a)
+    if failure == 'citations':
+        w.chat.stream_answer = 'Uncited answer'
+    if failure == 'history':
+        def fail_save(record):
+            raise DatabaseUnavailable('private SQL')
+        monkeypatch.setattr(w.active.knowledge, 'save_history', fail_save)
+    response = w.client.post('/api/questions/stream', json={'question':'报名口令是什么？'})
+    assert response.status_code == 200
+    events = [(block.splitlines()[0][7:], json.loads(block.splitlines()[1][6:]))
+              for block in response.text.strip().split('\n\n')]
+    assert events[0][0] == 'sources' and any(kind == 'delta' for kind, _ in events)
+    page = w.client.get('/api/question-history').json()
+    if failure:
+        assert events[-1][0] == 'error' and all(kind != 'done' for kind, _ in events)
+        assert page['total'] == 0 and 'private' not in response.text
+    else:
+        assert events[-1][0] == 'done' and page['total'] == 1
+        saved = events[-1][1]
+        detail = w.client.get(f"/api/question-history/{saved['history_id']}").json()
+        assert detail['answer'] == saved['answer'] == '报名口令是白鹭3718。[1]'
+        assert detail['sources'] == saved['sources'] == events[0][1]
+        assert saved['model']['model'] == 'stream-model'
+    assert source_truth(w.storage.a) == before
+    assert w.client.get('/api/runtime').json()['state'] == 'READY'
+    assert len(w.chat.calls) == 2
 
 
 def test_public_crud_qa_model_snapshot_and_deletion_sync(workspace):
