@@ -8,6 +8,16 @@
 
 四个业务模块互不 import。应用模块通过其 `public` 入口组合功能，不访问私有存储或 SDK。各模块维护自己的类型、错误和测试；接口适配只转换数据与错误。
 
+### M4 流式公开能力（Issue #66）
+
+- F `ChatSession.stream(prompt) -> Generator[str, None, None]`：复用本次冻结客户端，关闭链覆盖 SDK 与 HTTP 流，失败只暴露 ModelUnavailable。
+- C `Qa.stream(..., cancelled, record_timing)`：使用自身 StreamChatPort，先发包含 chunk_ids/trace 的 sources，再发 delta，最终校验后发 AnswerDraft。StreamCancelled 不作为技术拒答；旧 answer 路径共用准备与提示规则。
+- G `Questions.stream(question, StreamControl)`：核实来源并按 trace rank 排列，持 QUERY 许可完成所有阶段；begin_commit 与 cancel 通过锁排序，A 成功保存后才产生外部 done。
+- HTTP `QuestionStreamResponse`：同步生产线程内登记 request_work，有界队列传送 SSE。断开先通知取消，再等待原线程关闭生成器；不跨线程强制 close，不通过后台未登记工作逃避停机等待。
+- E：临时纯文本与正式结果分开，只有 done 更新正式答案与历史列表；历史 selectionRevision 隔离迟到输出。
+
+原 POST /api/questions 保留。流式不引入会话记忆、检索改写、表迁移或模型热路径缓存。详见 [事件契约](api.md#流式问答)与[交付记录](m4-streaming-delivery-2026-09-20.md)。
+
 ```mermaid
 flowchart TD
   E[Vue 工作台] --> G[FastAPI 与应用用例]

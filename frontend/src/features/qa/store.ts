@@ -2,13 +2,15 @@ import { defineStore } from 'pinia'
 
 import type { QuestionHistoryDetail, QuestionHistorySummary, SavedQuestion } from '@/shared/api/types'
 import { useGateStore } from '@/shared/gate'
-import { askQuestion, deleteQuestionHistory, getQuestionHistory, listQuestionHistory } from './api'
+import { askQuestionStream, deleteQuestionHistory, getQuestionHistory, listQuestionHistory } from './api'
 
 export const useQuestionStore = defineStore('questions', {
   state: () => ({
     draft: '',
     answeredQuestion: '',
     pendingQuestion: '',
+    previewText: '',
+    firstTextMs: null as number | null,
     result: null as SavedQuestion | QuestionHistoryDetail | null,
     loading: false,
     startedAt: 0,
@@ -55,18 +57,24 @@ export const useQuestionStore = defineStore('questions', {
       this.pendingQuestion = question
       this.startedAt = Date.now()
       try {
-        const answer = await askQuestion(question)
+        const answer = await askQuestionStream(question, text => {
+          if (revision !== this.selectionRevision) return
+          if (this.firstTextMs === null && text.trim()) this.firstTextMs = Date.now() - this.startedAt
+          this.previewText += text
+        })
         if (revision === this.selectionRevision) {
           this.result = answer
           this.answeredQuestion = question
           this.selectedHistoryId = answer.history_id
+          this.previewText = ''
         } else {
           this.latestSavedId = answer.history_id
         }
         void this.loadHistory(0)
       } catch (failure) {
         gate.raise(failure)
-        this.error = failure instanceof Error ? failure.message : '这次回答没有完成，请重试。'
+        const message = failure instanceof Error ? failure.message : '这次回答没有完成，请重试。'
+        this.error = revision === this.selectionRevision ? message : `另一条问题「${question}」的回答未完成：${message}`
       } finally {
         this.loading = false
         void gate.refresh()
@@ -140,6 +148,8 @@ export const useQuestionStore = defineStore('questions', {
       this.detailLoading = false
       this.detailError = ''
       this.result = null
+      this.previewText = ''
+      this.firstTextMs = null
       this.answeredQuestion = ''
       this.sourceChanged = false
     },

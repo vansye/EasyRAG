@@ -38,11 +38,11 @@ await page.route(/\/api\//, route => {
   if (url.pathname === '/api/documents') return route.fulfill({ json: { total: 0, items: [] } })
   if (url.pathname === '/api/question-history') return route.fulfill({ json: { total: history.length, items: history.map(({ id, question, status, model, elapsed_ms, created_at }) => ({ id, question, status, model, elapsed_ms, created_at })) } })
   if (url.pathname.startsWith('/api/question-history/')) return route.fulfill({ json: history.find(item => item.id === Number(url.pathname.split('/').at(-1))) })
-  if (url.pathname === '/api/questions') {
+  if (url.pathname === '/api/questions/stream') {
     modelRequests++
     const record = { ...answer, id: history.length + 1, question: request.postDataJSON().question }
     history.unshift(record)
-    return route.fulfill({ json: { ...answer, history_id: record.id } })
+    return route.fulfill({ contentType: 'text/event-stream', body: `event: done\ndata: ${JSON.stringify({ ...answer, history_id: record.id })}\n\n` })
   }
   throw new Error(`Unexpected API request: ${request.method()} ${url.pathname}`)
 })

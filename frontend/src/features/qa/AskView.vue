@@ -82,6 +82,11 @@ onUnmounted(() => clearInterval(elapsedTimer))
     </div>
 
     <section v-if="qa.loading" class="answer-loading" :class="{ 'is-background': qa.historyMode }" role="status" aria-live="polite"><span class="loading-orbit"><AppIcon name="spark" :size="23" /></span><div><h2>{{ qa.historyMode ? '另一条回答正在生成…' : '正在查找资料，整理回答…' }}</h2><p class="pending-question">{{ qa.pendingQuestion }}</p><p>已等待 {{ seconds }} 秒<span v-if="seconds >= 20"> · 模型仍在处理，请稍候</span></p></div><div v-if="!qa.historyMode" class="loading-lines" aria-hidden="true"><span class="skeleton" /><span class="skeleton" /><span class="skeleton" /></div></section>
+    <section v-if="qa.previewText && !qa.historyMode" class="stream-preview" aria-label="正在生成的回答" :aria-busy="qa.loading">
+      <p class="eyebrow">{{ qa.loading ? '正在生成，完成后核验出处并保存' : '回答未完成，以下内容仅供预览' }}</p>
+      <p v-if="qa.firstTextMs !== null" class="history-description">首字 {{ (qa.firstTextMs / 1000).toFixed(1) }} 秒</p>
+      <div class="stream-preview-text">{{ qa.previewText }}</div>
+    </section>
     <div v-if="qa.latestSavedId !== null" class="notice notice-success question-saved-notice" role="status"><AppIcon name="check" :size="17" /><span>新回答已保存到历史。</span><button class="text-button" @click="qa.openHistory(qa.latestSavedId)">查看新回答</button></div>
     <section v-if="qa.detailLoading" class="history-detail-loading" role="status"><AppIcon name="clock" :size="18" /><span>正在读取选中的历史回答…</span></section>
     <div v-if="qa.detailError" class="notice notice-error history-detail-error" role="alert"><AppIcon name="info" :size="18" /><span>{{ qa.detailError }}</span><button v-if="qa.selectedHistoryId !== null" class="text-button" @click="qa.openHistory(qa.selectedHistoryId)">重新读取</button></div>
@@ -119,3 +124,8 @@ onUnmounted(() => clearInterval(elapsedTimer))
   </aside>
   </div>
 </template>
+
+<style scoped>
+.stream-preview { min-width: 0; padding: 1.5rem; margin-top: 1rem; border: 1px solid var(--border, #deded6); border-radius: 16px; }
+.stream-preview-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; }
+</style>

@@ -45,7 +45,7 @@ async function fixture() {
     const id = Math.max(0, ...history.map(record => record.id)) + 1
     const record = seedHistory(id, route.request().postDataJSON().question)
     const { id: savedId, question, ...saved } = record
-    return route.fulfill({ json: { ...saved, history_id: savedId } })
+    return route.fulfill({ contentType: 'text/event-stream', body: `event: done\ndata: ${JSON.stringify({ ...saved, history_id: savedId })}\n\n` })
   }
   function historyPage(url) {
     const page = Number(url.searchParams.get('page'))
@@ -84,7 +84,7 @@ async function fixture() {
       runtime.state = 'READY'
       return route.fulfill({ json: { state: 'READY', recovered: 0 } })
     }
-    if (url.pathname === '/api/questions') {
+    if (url.pathname === '/api/questions/stream') {
       logs.questions.push(request.postDataJSON())
       if (controls.onQuestion) return controls.onQuestion(route)
       return completeQuestion(route)
@@ -526,7 +526,7 @@ try {
     await page.waitForLoadState('networkidle')
     assert.equal(await page.locator('.question-history').count(), 1, 'history panel is present')
     await page.locator('#knowledge-question').fill('New question in progress')
-    const pending = page.waitForRequest(base + '/api/questions')
+    const pending = page.waitForRequest(base + '/api/questions/stream')
     await page.locator('.send-button').click()
     await pending
     await page.locator('[data-history-id="1"] .history-select').click()
@@ -749,6 +749,72 @@ try {
       return rect.top >= 0 && rect.bottom <= window.innerHeight
     })
     assert.equal(visible, true, 'the selected history question should be visible without manual scrolling')
+  })
+
+  await run('stream preview stays incomplete on EOF and does not create local history', async ({ page, controls, history }) => {
+    controls.onQuestion = route => route.fulfill({ contentType: 'text/event-stream', body: 'event: delta\ndata: "Preview text [1]"\n\n' })
+    await page.goto(base + '/ask')
+    await page.waitForLoadState('networkidle')
+    await page.locator('#knowledge-question').fill('Stream question')
+    await page.locator('.send-button').click()
+    await page.locator('.question-error').waitFor()
+    assert.equal(await page.locator('.stream-preview-text').textContent(), 'Preview text [1]')
+    assert.equal(history.length, 0)
+    assert.equal(await page.locator('.answer-question').count(), 0)
+    assert.equal(await page.locator('.stream-preview .eyebrow').textContent(), '回答未完成，以下内容仅供预览')
+  })
+
+  await run('browser displays a live delta before completion and ignores it after history selection', async ({ page, seedHistory, answer }) => {
+    seedHistory(9, 'Saved historical question')
+    await page.addInitScript(() => {
+      const original = window.fetch
+      window.fetch = async (input, init) => {
+        if (input !== '/api/questions/stream') return original(input, init)
+        return new Response(new ReadableStream({ start(controller) { window.streamTestController = controller } }), {
+          headers: { 'Content-Type': 'text/event-stream' },
+        })
+      }
+    })
+    await page.goto(base + '/ask')
+    await page.waitForLoadState('networkidle')
+    await page.locator('#knowledge-question').fill('Live question')
+    await page.locator('.send-button').click()
+    await page.waitForFunction(() => Boolean(window.streamTestController))
+    await page.evaluate(() => window.streamTestController.enqueue(new TextEncoder().encode('event: delta\ndata: "Visible before done"\n\n')))
+    await page.locator('.stream-preview-text').filter({ hasText: 'Visible before done' }).waitFor()
+    assert.equal(await page.locator('.answer-question').count(), 0)
+    await page.locator('[data-history-id="9"] .history-select').click()
+    await page.locator('.answer-question h2').filter({ hasText: 'Saved historical question' }).waitFor()
+    await page.evaluate(result => {
+      window.streamTestController.enqueue(new TextEncoder().encode('event: delta\ndata: "Late preview"\n\n'))
+      window.streamTestController.enqueue(new TextEncoder().encode(`event: done\ndata: ${JSON.stringify(result)}\n\n`))
+    }, { ...answer, history_id: 10 })
+    await page.locator('.question-saved-notice').waitFor()
+    assert.equal(await page.locator('.stream-preview').count(), 0)
+    assert.equal(await page.locator('.answer-question h2').textContent(), 'Saved historical question')
+  })
+
+  await run('a background stream failure identifies its question without replacing selected history', async ({ page, seedHistory }) => {
+    seedHistory(9, 'Historical question')
+    await page.addInitScript(() => {
+      const original = window.fetch
+      window.fetch = async (input, init) => {
+        if (input !== '/api/questions/stream') return original(input, init)
+        return new Response(new ReadableStream({ start(controller) { window.streamTestController = controller } }), {
+          headers: { 'Content-Type': 'text/event-stream' },
+        })
+      }
+    })
+    await page.goto(base + '/ask')
+    await page.waitForLoadState('networkidle')
+    await page.locator('#knowledge-question').fill('Background question')
+    await page.locator('.send-button').click()
+    await page.waitForFunction(() => Boolean(window.streamTestController))
+    await page.locator('[data-history-id="9"] .history-select').click()
+    await page.locator('.answer-question h2').filter({ hasText: 'Historical question' }).waitFor()
+    await page.evaluate(() => window.streamTestController.enqueue(new TextEncoder().encode('event: error\ndata: {"error":"Generation failed"}\n\n')))
+    await page.locator('.question-error').filter({ hasText: '另一条问题「Background question」的回答未完成' }).waitFor()
+    assert.equal(await page.locator('.answer-question h2').textContent(), 'Historical question')
   })
 
   console.log('REGRESSIONS_COMPLETE', JSON.stringify(results))
