@@ -4,7 +4,7 @@
 
 ## 路由
 
-除文件上传外，请求体使用 `application/json`。成功响应为 JSON；删除资料或问答历史成功时没有响应体。
+除文件上传外，请求体使用 `application/json`。普通成功响应为 JSON，流式问答为 SSE；删除资料或问答历史成功时没有响应体。
 
 | 方法与路径 | 参数 / 请求体 | 成功状态与含义 |
 |---|---|---|
@@ -19,6 +19,7 @@
 | `POST /api/documents/{document_id}/reindex` | 路径 ID，无请求体 | `202`，`{id, index_status, reindexed}`，重处理已提交 |
 | `DELETE /api/documents/{document_id}` | 路径 ID | `204`，撤下向量、软删除资料并删除切片 |
 | `POST /api/questions` | `{"question":"问题"}` | `200`，已保存的回答、出处、检索过程与历史元数据 |
+| `POST /api/questions/stream` | `{"question":"问题"}` | `200 text/event-stream`，来源、增量和最终已保存结果 |
 | `GET /api/question-history` | `page=0`、`size=20` | `200`，`{total, items}` 历史摘要 |
 | `GET /api/question-history/{history_id}` | 路径 ID | `200`，历史问题、回答与来源快照 |
 | `DELETE /api/question-history/{history_id}` | 路径 ID | `204`，删除该条问答历史 |
@@ -173,6 +174,23 @@
 | `status` / `failed_stage` | `ANSWERED / PARTIAL / REFUSED / FAILED`；成功时失败阶段为 `null` |
 
 未执行的阶段为 `null`，异常调用仍计入已消耗时间。`failed_stage` 区分 `session/search/judge/generate/sources/history`，检索内部耗时由 embedding/vector 两字段定位。日志不含问题、答案、来源正文、服务地址或凭据；`total_ms` 不包含网络传输与浏览器渲染，不能当作用户看到完整答案的时间。原 `elapsed_ms` 仍截止历史保存前。
+
+## 流式问答
+
+网页通过 fetch POST 读取 SSE，不使用自动重连。事件格式为 `event: 类型`、`data: JSON` 与空行；JSON 中的换行经过转义。响应禁止缓存，代理应关闭响应缓冲。
+
+| 事件 | data | 语义 |
+|---|---|---|
+| `sources` | 来源数组 | 按生成时固定的检索 rank 排列，先核实来源完整性 |
+| `delta` | 文本字符串 | 尚未经过最终引用校验的预览，可能包含不完整 Markdown |
+| `done` | 与 JSON 问答相同的完整结果 | 引用校验通过且 MySQL 历史提交成功，包含 history_id |
+| `error` | `{error, state?}` | 本次技术失败或门禁拒绝，停止消费；不伪装成 REFUSED |
+
+生成型答案按 sources → delta → done/error 输出；拒答不进入生成，可以直接 done。参数错误在响应前返回 400；已开始 SSE 后的门禁、模型、引用和保存错误使用 error，HTTP 状态仍为 200。EOF 不等于成功。客户端不自动重试，因为提交开始后断连可能已保存成功但客户端没有收到 done；应查看历史再决定是否重问。
+
+断连与历史提交开始通过锁串行化：取消先发生则不提交，提交先发生则允许一次原子提交完成。同步 SDK 调用不能强行中断，取消后不开始下一阶段，已有调用结束或超时后由原工作线程关闭生成器并释放 QUERY/request_work；停机等待它实际结束。部署使用当前单 worker Uvicorn（ASGI HTTP 2.3），断连由响应监听处理。
+
+流式日志增加 `stream=true`、`first_text_ms`（从取得 QUERY 许可后至首段非空文本，不含 HTTP 解析与线程调度）和 CANCELLED 状态；`total_ms` 包含提交及队列等待，不含浏览器渲染，`generate_ms` 包含生成迭代期间的背压等待。前端首字时间从提交到收到首个非空增量单独计算，不能与 SDK 首段时间混用。未完成预览不作为历史记录或已核验引用展示。
 
 ## 问答历史
 

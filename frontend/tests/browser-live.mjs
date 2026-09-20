@@ -62,11 +62,18 @@ async function syncRuntime() {
 }
 async function ask() {
   await page.getByRole('textbox', { name: '向知识库提问' }).fill(question)
-  const pending = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/questions' && response.request().method() === 'POST', { timeout: 240000 })
+  const pending = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/questions/stream' && response.request().method() === 'POST', { timeout: 240000 })
   const startedAt = Date.now()
   await page.getByRole('button', { name: '发送问题', exact: true }).click()
   const response = await pending
-  const result = await response.json()
+  assert.equal(response.status(), 200, 'stream request failed')
+  const body = await response.text()
+  const events = body.trim().split(/\r?\n\r?\n/).map(block => {
+    const lines = block.split(/\r?\n/)
+    return { kind: lines[0].slice(7), data: JSON.parse(lines.filter(line => line.startsWith('data:')).map(line => line.slice(6)).join('\n')) }
+  })
+  assert.equal(events.at(-1)?.kind, 'done', 'stream must finish with a saved answer')
+  const result = events.at(-1).data
   report.queries.push({ status: response.status(), elapsedMs: Date.now() - startedAt, response: result })
   assert.equal(response.status(), 200, `question failed: ${result.error || response.status()}`)
   await page.locator('.answer-paper').waitFor()

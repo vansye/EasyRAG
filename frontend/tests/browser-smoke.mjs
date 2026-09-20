@@ -56,7 +56,7 @@ await page.route(/\/api\//, async (route) => {
   if (!path.startsWith('/api/')) return route.continue()
   interceptedPaths.push(path)
   if (path === '/api/runtime') return route.fulfill({ json: { state: reindexingId !== null || Date.now() < processingUntil ? 'MUTATING' : 'READY', rag_available: true, llm: { configured: true, provider: 'openai', model: 'browser-test-model' }, embedding: { provider: 'ollama', model: 'bge-m3', dim: 1024 } } })
-  if (path === '/api/questions') {
+  if (path === '/api/questions/stream') {
     receivedQuestion = request.postDataJSON().question
     if (pendingFirstQuestion) {
       pendingFirstQuestion = false
@@ -67,7 +67,7 @@ await page.route(/\/api\//, async (route) => {
     const response = { ...(refused ? { ...answer, answer: '知识库中没有找到能回答这个问题的内容。', status: 'REFUSED', sources: [], trace: [{ ...answer.trace[0], decision: 'NONE' }] } : partial ? { ...answer, status: 'PARTIAL', trace: [{ ...answer.trace[0], decision: 'PARTIAL' }] } : answer), history_id: nextQuestionId++ }
     const { history_id, ...detail } = structuredClone(response)
     questionHistory.unshift({ ...detail, id: history_id, question: receivedQuestion })
-    return route.fulfill({ json: response })
+    return route.fulfill({ contentType: 'text/event-stream', body: `event: done\ndata: ${JSON.stringify(response)}\n\n` })
   }
   if (path === '/api/question-history') {
     const pageIndex = Number(url.searchParams.get('page'))
