@@ -16,11 +16,13 @@ from starlette.formparsers import MultiPartException
 
 from app.modules.answer_models.public import ConfigRejected, ModelUnavailable
 from app.modules.knowledge.public import DatabaseUnavailable, DocumentNotFound, HistoryNotFound, InputRejected
+from app.modules.qa.public import validate_question
 
 from .application.errors import GateBusy, MutationFailed, QuestionFailed, RecoveryFailed
 from .application.gate import State
 from .application.runtime import RuntimeSettings, Services
 from .lifecycle import lifespan_for
+from .question_stream import QuestionStreamResponse
 
 
 _HARD_UPLOAD_BYTES = 4 * 1024 * 1024
@@ -131,7 +133,7 @@ def create_app(services: Services | None = None, *, settings: RuntimeSettings | 
     async def invalid_request(request, _failure):
         if request.url.path == '/api/model-config':
             message = _INVALID_MODEL
-        elif request.url.path == '/api/questions':
+        elif request.url.path in ('/api/questions', '/api/questions/stream'):
             message = _INVALID_QUESTION
         else:
             message = '请求参数无效，请检查字段类型和必填项'
@@ -253,6 +255,14 @@ def create_app(services: Services | None = None, *, settings: RuntimeSettings | 
     def delete(request: Request, document_id: _DocumentId):
         _services(request).documents.delete(document_id)
         return Response(status_code=204)
+
+    @app.post('/api/questions/stream')
+    async def ask_stream(request: Request, body: _QuestionBody):
+        try:
+            validate_question(body.question)
+        except ValueError:
+            raise InputRejected(_INVALID_QUESTION) from None
+        return QuestionStreamResponse(_services(request), body.question)
 
     @app.post('/api/questions')
     @_worker
