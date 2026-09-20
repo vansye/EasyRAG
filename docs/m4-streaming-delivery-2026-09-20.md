@@ -1,6 +1,6 @@
 # M4 流式输出：实施范围与持续交付计划
 
-日期：2026-09-20。状态：23 文件实施范围已获确认，前后端本地验收通过，前端准备发布。总 Issue #1 是范围裁判；本次只交付 M4 优先级 3，不新增召回算法、查询改写或多轮会话。
+日期：2026-09-20。状态：23 文件实施范围已获确认，功能已合入并加载运行；真实闭环遇到检索失败，见 #71。总 Issue #1 是范围裁判；本次只交付 M4 优先级 3，不新增召回算法、查询改写或多轮会话。
 
 ## 当前验证与审查
 
@@ -10,18 +10,27 @@
 - F 新增 9 项先失败再通过，后补两种 provider 的真实 SDK 提前关闭；C 12 项、G 8 项、HTTP 4 项、前端 7 项分别记录了缺失实现的预期失败。专项包含在全量内，不相加。
 - 独立审查 F/C 与 G/HTTP，补齐逆序 chunk ID、真实 SDK 关闭、完整 HTTP 断连/原生取消/生命周期关闭，以及历史写入失败测试。资源关闭发生在线程实际退出之后，进程锁不提前释放。
 - MySQL 集成验收：82 passed。第一次执行因 Windows stdin 中文路径编码未加载连接配置，报无密码认证失败；改用环境变量传递配置路径，明确校验已加载后重新执行通过。没有因此修改业务配置或数据库。
-- 已建立总 #1 的真实子 Issue [#66](https://github.com/vansye/EasyRAG/issues/66)，并回读父子关系。运行中的版本仍为此前的 4efdfb4；开发测试不代表运行版本更新。
+- 已建立总 #1 的真实子 Issue [#66](https://github.com/vansye/EasyRAG/issues/66)，并回读父子关系。运行目录和新后端已加载 ab0f0e4，健康 UP、门禁 READY、630 向量；真实模型闭环未通过，详见下文。
 
 | 切片 | PR | 功能提交 | CI |
 |---|---|---|---|
 | F 模型流 | [#67](https://github.com/vansye/EasyRAG/pull/67) | d90c8c1 | [35503861291](https://github.com/vansye/EasyRAG/actions/runs/35503861291) 两项成功 |
 | C 问答流 | [#68](https://github.com/vansye/EasyRAG/pull/68) | bede172 | [35503864859](https://github.com/vansye/EasyRAG/actions/runs/35503864859) 两项成功 |
 | G/HTTP | [#69](https://github.com/vansye/EasyRAG/pull/69) | fab8a3f | [35503868200](https://github.com/vansye/EasyRAG/actions/runs/35503868200) 两项成功 |
-| 前端与文档 | 未发布 | 未提交 | 本地通过；冒烟、模型配置、13 组生产布局通过；真实联调脚本已适配，实际运行待部署验收 |
+| 前端与文档 | [#70](https://github.com/vansye/EasyRAG/pull/70) | c87951b | [35507032239](https://github.com/vansye/EasyRAG/actions/runs/35507032239) 两项成功 |
 
 三个后端 PR 已按 #67 → #68 → #69 合入，每次核对 head SHA、retarget 后继到 main。合并提交分别为 e49720d、43acd5c、9084d8a；最终 [main CI 35504296305](https://github.com/vansye/EasyRAG/actions/runs/35504296305) 成功，前两个 main CI 35504287308、35504291899 同样成功。#66 保持 OPEN，F/C/G 完成项已更新并保留前端、整项发布及运行验收待办。
 
-继续开发工作区为原项目已忽略目录 `rag-service/data/worktrees/m4-streaming`，分支 feat/m4-streaming 当前功能 HEAD fab8a3f；远端 main 已到 9084d8a。未提交前端与四份文档保留。用户已确认额外 3 脚本范围，browser-smoke.mjs、browser-question-layout.mjs、browser-live.mjs 已适配；主流程冒烟、模型配置和 13 组生产布局已通过，真实模型联调尚未执行；下一步发布前端 PR；不得把现有运行服务视为流式已生效。
+前端 #70 已合入 main ab0f0e4，[main CI 35507216340](https://github.com/vansye/EasyRAG/actions/runs/35507216340) 成功。运行目录快进保留三份未跟踪评估文件；旧 worker 5980 收到正常 Ctrl-C，日志确认 Application shutdown complete 后退出。新 worker 3180 启动并加载流式路由；前端 Vite 读取更新源码。浏览器显式确认就绪后 READY，MySQL/检索均 UP、630 向量。没有迁移或重建业务索引。
+
+真实浏览器闭环未通过，不能把隔离验收当作真实模型效果证明：
+
+1. 首次临时资料 24 索引后，Playwright `response.text()` 无法回读被应用 reader.cancel 释放的响应体。脚本清理资料返回 204。
+2. 修正为页面中读取同一次 fetch 的 response.clone，不增加模型请求。第二次临时资料 25 索引完成，成功收到 SSE done 与 history_id 12，但 top-5 全部为文档 3，没有预期资料；判定 NONE、REFUSED，来源断言失败，资料 25 清理返回 204。
+3. 此检索失败另建 [#71](https://github.com/vansye/EasyRAG/issues/71)，归 M4 优先级 5；不改问法或断言掩盖失败。原始报告在本机 frontend/.verification/live-report.json，未公开业务正文。两次测试未走到末尾原资料全量哈希复核，不宣称该检查通过。
+4. 当前模型配置来源 local，测试按原配置保存并核对公开字段/密钥留空语义；未切换模型。测试产生的拒答历史按产品规则保留，不当作流式成功生成样本。
+
+开发工作区位于原项目已忽略的 rag-service/data/worktrees/m4-streaming。功能23文件清单及已通过本地/CI证据如下；真实生成、更新和删除后的完整问答闭环需在 #71 解决后复验。#66 保持 OPEN 并指向该限制，不提前宣称所有验收完成。
 
 预览文本按纯文本展示，最终 done 后才展示现有 Markdown/引用组件。sources 使用 trace rank，不使用 chunk ID 数值排序；同一份来源顺序用于 done 与历史。前端不自动重连/重试。提交开始后断连可能留下已保存但客户端未收到的记录，失败提示引导先查历史。
 
