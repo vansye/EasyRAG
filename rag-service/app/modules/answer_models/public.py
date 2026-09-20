@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Generator
+from contextlib import closing
 from importlib import import_module
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -57,6 +59,10 @@ class ChatSession(Protocol):
         """Complete one prompt using the same frozen model for this session."""
         ...
 
+    def stream(self, prompt: str) -> Generator[str, None, None]:
+        """Yield text using the frozen client; the consumer must close on early exit."""
+        ...
+
 
 class _Session:
     __slots__ = ("__client", "__model_info")
@@ -89,6 +95,24 @@ class _Session:
         if not isinstance(content, str) or not content.strip():
             raise ModelUnavailable()
         return content
+
+    def stream(self, prompt: str) -> Generator[str, None, None]:
+        try:
+            from langchain_core.messages import HumanMessage
+
+            has_text = False
+            with closing(self.__client.stream([HumanMessage(content=prompt)])) as chunks:
+                for chunk in chunks:
+                    content = chunk.content
+                    if not isinstance(content, str):
+                        raise ModelUnavailable()
+                    has_text = has_text or bool(content.strip())
+                    if content:
+                        yield content
+            if not has_text:
+                raise ModelUnavailable()
+        except Exception:
+            raise ModelUnavailable() from None
 
 
 def _read_settings(path: Path) -> tuple[_Settings, str]:
