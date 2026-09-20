@@ -12,6 +12,19 @@ await mkdir(artifacts, { recursive: true })
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
 const page = await context.newPage()
+// CDP may discard a fetch stream after the application cancels its reader at done.
+// Observe a clone in the page, preserving the same request and model invocation.
+await page.addInitScript(() => {
+  const originalFetch = window.fetch
+  window.fetch = async (input, init) => {
+    if (input !== '/api/questions/stream') return originalFetch(input, init)
+    window.liveQuestionStream = { body: null, error: null }
+    const response = await originalFetch(input, init)
+    void response.clone().text().then(body => { window.liveQuestionStream.body = body },
+      error => { window.liveQuestionStream.error = String(error) })
+    return response
+  }
+})
 page.setDefaultTimeout(15000)
 const pageErrors = []
 page.on('pageerror', (error) => pageErrors.push(error.message))
@@ -67,7 +80,10 @@ async function ask() {
   await page.getByRole('button', { name: '发送问题', exact: true }).click()
   const response = await pending
   assert.equal(response.status(), 200, 'stream request failed')
-  const body = await response.text()
+  await page.waitForFunction(() => window.liveQuestionStream?.body != null || window.liveQuestionStream?.error, null, { timeout: 240000 })
+  const observed = await page.evaluate(() => window.liveQuestionStream)
+  assert.equal(observed.error, null)
+  const body = observed.body
   const events = body.trim().split(/\r?\n\r?\n/).map(block => {
     const lines = block.split(/\r?\n/)
     return { kind: lines[0].slice(7), data: JSON.parse(lines.filter(line => line.startsWith('data:')).map(line => line.slice(6)).join('\n')) }
