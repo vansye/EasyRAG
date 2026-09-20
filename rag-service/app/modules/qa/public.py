@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Generator
+from contextlib import closing
 from dataclasses import dataclass
 from time import perf_counter
 from typing import Literal, Protocol, cast
@@ -21,7 +22,8 @@ _VERDICT_PATTERN = re.compile(r"\{.*\}", re.DOTALL)
 
 __all__ = [
     "AnswerDraft", "AnswerStatus", "ChatPort", "Evidence", "JudgeVerdict", "Qa", "QaError",
-    "QaTraceEntry", "SearchPort", "TraceHit", "validate_question",
+    "QaTraceEntry", "SearchPort", "TraceHit", "validate_question", "StreamChatPort",
+    "StreamCancelled", "QaStreamEvent",
 ]
 
 
@@ -51,6 +53,14 @@ class ChatPort(Protocol):
     def complete(self, prompt: str) -> str: ...
 
 
+class StreamChatPort(ChatPort, Protocol):
+    def stream(self, prompt: str) -> Generator[str, None, None]: ...
+
+
+class StreamCancelled(Exception):
+    """The consumer has stopped; no further stages may begin."""
+
+
 @dataclass(frozen=True, slots=True)
 class TraceHit:
     chunk_id: int
@@ -73,6 +83,20 @@ class AnswerDraft:
     status: AnswerStatus
     chunk_ids: tuple[int, ...]
     trace: tuple[QaTraceEntry, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class QaStreamEvent:
+    kind: Literal['sources', 'delta', 'done']
+    text: str = ''
+    chunk_ids: tuple[int, ...] = ()
+    trace: tuple[QaTraceEntry, ...] = ()
+    draft: AnswerDraft | None = None
+
+
+def _check_cancelled(cancelled: Callable[[], bool]) -> None:
+    if cancelled():
+        raise StreamCancelled()
 
 
 def validate_question(question: str) -> None:
@@ -154,20 +178,24 @@ class Qa:
 
     __slots__ = ()
 
-    def answer(
+    def _prepare(
         self, question: str, search: SearchPort, chat: ChatPort, top_k: int = 5,
         *, record_timing: Callable[[str, float], None] | None = None,
-    ) -> AnswerDraft:
+        cancelled: Callable[[], bool] = lambda: False,
+    ):
         validate_question(question)
         if type(top_k) is not int or top_k <= 0:
             raise ValueError("top_k must be positive")
+        _check_cancelled(cancelled)
         try:
             evidence = search.search(question, top_k=top_k)
         except Exception as exc:
             raise QaError("search", type(exc).__name__) from None
+        _check_cancelled(cancelled)
         verdict = _parse_verdict(_complete(
             chat, _judge_prompt(question, evidence), "judge", record_timing,
         )) if evidence else "NONE"
+        _check_cancelled(cancelled)
         trace = (QaTraceEntry(
             round_index=1,
             query=question,
@@ -177,6 +205,15 @@ class Qa:
             ),
             decision=verdict,
         ),)
+        return evidence, verdict, trace
+
+    def answer(
+        self, question: str, search: SearchPort, chat: ChatPort, top_k: int = 5,
+        *, record_timing: Callable[[str, float], None] | None = None,
+    ) -> AnswerDraft:
+        evidence, verdict, trace = self._prepare(
+            question, search, chat, top_k, record_timing=record_timing,
+        )
         if verdict == "NONE":
             return AnswerDraft(
                 answer=_REFUSAL_ANSWER, status="REFUSED", chunk_ids=(), trace=trace,
@@ -193,3 +230,50 @@ class Qa:
             chunk_ids=tuple(sorted({chunk.chunk_id for chunk in evidence})),
             trace=trace,
         )
+
+    def stream(
+        self, question: str, search: SearchPort, chat: StreamChatPort, top_k: int = 5,
+        *, record_timing: Callable[[str, float], None] | None = None,
+        cancelled: Callable[[], bool] = lambda: False,
+    ) -> Generator[QaStreamEvent, None, None]:
+        evidence, verdict, trace = self._prepare(
+            question, search, chat, top_k, record_timing=record_timing, cancelled=cancelled,
+        )
+        if verdict == 'NONE':
+            yield QaStreamEvent('done', draft=AnswerDraft(_REFUSAL_ANSWER, 'REFUSED', (), trace))
+            return
+        chunk_ids = tuple(sorted({chunk.chunk_id for chunk in evidence}))
+        yield QaStreamEvent('sources', chunk_ids=chunk_ids, trace=trace)
+        _check_cancelled(cancelled)
+        started = perf_counter()
+        parts = []
+        try:
+            with closing(chat.stream(_generate_prompt(question, evidence, partial=verdict == 'PARTIAL'))) as chunks:
+                while True:
+                    _check_cancelled(cancelled)
+                    try:
+                        text = next(chunks)
+                    except StopIteration:
+                        break
+                    _check_cancelled(cancelled)
+                    if not isinstance(text, str):
+                        raise QaError('generate', 'EMPTY_OR_NON_TEXT_CONTENT')
+                    if text:
+                        parts.append(text)
+                        yield QaStreamEvent('delta', text=text)
+        except (StreamCancelled, QaError):
+            raise
+        except Exception as failure:
+            raise QaError('generate', type(failure).__name__) from None
+        finally:
+            if record_timing is not None:
+                record_timing('generate', (perf_counter() - started) * 1000)
+        _check_cancelled(cancelled)
+        answer = ''.join(parts)
+        if not answer.strip():
+            raise QaError('generate', 'EMPTY_OR_NON_TEXT_CONTENT')
+        if not citations_are_valid(answer, len(evidence)):
+            raise QaError('generate', 'INVALID_CITATIONS')
+        yield QaStreamEvent('done', draft=AnswerDraft(
+            answer, 'ANSWERED' if verdict == 'SUFFICIENT' else 'PARTIAL', chunk_ids, trace,
+        ))
