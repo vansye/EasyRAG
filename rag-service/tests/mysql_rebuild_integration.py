@@ -355,3 +355,32 @@ def test_adversarial_chunk_drafts_persist_and_rebuild_without_losing_source(serv
         assert source_truth(a) == original_source
         verify_consistency(a.snapshots(), b.inspect())
         assert readiness.ready().state == State.READY
+
+
+def test_repeated_paragraphs_keep_every_row_but_one_vector_and_stale_full_index_is_repaired(services):
+    a, b = services.a, services.b
+    body = ('dup ' * 40 + '\n\n') * 64
+    with readiness_for(a, b) as (readiness, gate):
+        assert readiness.ready().state == State.READY
+        document = a.create('repeated.md', body.encode('utf-8'))
+        assert Indexer(a, b, gate).run(document.id).outcome == 'INDEXED'
+        rows = a.snapshots()[0].chunks
+        assert a.get(document.id).chunk_count == len(rows) == 64
+        assert len({chunk.text for chunk in rows}) == 1
+        entries = b.inspect()
+        assert [entry.chunk_id for entry in entries] == [rows[0].id]
+        verify_consistency(a.snapshots(), entries)
+        assert readiness.ready().state == State.READY
+        hits = b.search('dup', top_k=5)
+        assert [hit.chunk_id for hit in hits] == [rows[0].id]
+
+        b.replace(document.id, tuple(retrieval.IndexChunk(c.id, c.text, c.heading_path, ()) for c in rows))
+        assert len(b.inspect()) == 64
+        with pytest.raises(RecoveryFailed):
+            readiness.ready()
+        assert gate.state == State.RECOVERY_REQUIRED
+
+        rebuilt = rebuild_index(a, b)
+        assert rebuilt.chunks == rebuilt.reused_chunks == 64
+        assert [entry.chunk_id for entry in b.inspect()] == [rows[0].id]
+        assert readiness.ready().state == State.READY

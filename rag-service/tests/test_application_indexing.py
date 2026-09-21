@@ -116,6 +116,24 @@ def test_replace_count_mismatch_is_cleaned_before_reopening(workflow):
     w.b.delete_document.assert_called_once_with(1)
 
 
+def test_repeated_chunks_are_all_stored_but_indexed_once(workflow):
+    w = workflow
+    drafts = tuple(retrieval.ChunkDraft(text, 'Title', start, start + 3, 1)
+                   for start, text in ((0, 'dup'), (3, 'one'), (6, 'dup')))
+    w.b.split.return_value = drafts
+    w.a.begin_indexing.return_value = tuple(
+        knowledge.StoredChunk(101 + seq, 1, seq, d.text, d.byte_start, d.byte_end, 'Title', 1) for seq, d in enumerate(drafts))
+    w.b.replace.return_value = 2
+    assert w.indexer.run(1).outcome == 'INDEXED' and w.gate.state == State.READY
+    assert len(w.a.begin_indexing.call_args.args[1]) == 3
+    w.b.replace.assert_called_once_with(1, (
+        retrieval.IndexChunk(101, 'dup', 'Title', ('notes',)), retrieval.IndexChunk(102, 'one', 'Title', ('notes',))))
+    w.b.replace.return_value = 3
+    w.record.index_status = 'PENDING'
+    assert w.indexer.run(1).outcome == 'FAILED'
+    w.a.mark_indexed.assert_called_once()
+
+
 def test_busy_worker_leaves_pending_without_waiting_or_touching_modules(workflow):
     w = workflow
     with w.gate.try_acquire(Operation.QUERY).lease:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from contextlib import contextmanager
 from functools import lru_cache
 from hashlib import sha256
@@ -24,14 +24,32 @@ ChunkDraft = Chunk
 
 __all__ = [
     "Chunk", "ChunkDraft", "ChunkIdConflict", "IndexChunk", "IndexEntry", "IndexMetadataMismatch",
-    "IndexWriteError", "Retrieval", "RetrievalSettings", "RetrievalUnavailable", "SearchHit", "split_markdown",
-    "splitter_fingerprint",
+    "IndexWriteError", "Retrieval", "RetrievalSettings", "RetrievalUnavailable", "SearchHit", "index_representatives",
+    "split_markdown", "splitter_fingerprint",
 ]
 
 
 def splitter_fingerprint() -> str:
     """Reproducibility metadata for offline evaluation without exposing private paths."""
     return sha256(Path(__file__).with_name('_chunking.py').read_bytes()).hexdigest()
+
+
+def index_representatives(chunks: Iterable[IndexChunk]) -> tuple[IndexChunk, ...]:
+    """Keep the first chunk per identical embedding input within one document.
+
+    Identical inputs produce identical vectors; hundreds of them degrade HNSW navigation
+    until unrelated chunks become unreachable. Storage keeps every chunk row, only the
+    index is deduplicated, and callers must apply the same rule when auditing the index.
+    """
+    seen: set[str] = set()
+    kept = []
+    for chunk in chunks:
+        if not isinstance(chunk, IndexChunk):
+            raise ValueError("chunks must contain IndexChunk records")
+        if chunk.embedding_text not in seen:
+            seen.add(chunk.embedding_text)
+            kept.append(chunk)
+    return tuple(kept)
 
 
 class RetrievalUnavailable(RuntimeError):

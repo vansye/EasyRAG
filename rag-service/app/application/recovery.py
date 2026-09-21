@@ -4,7 +4,7 @@ import logging
 from dataclasses import dataclass
 
 from app.modules.knowledge.public import ChunkWrite, Knowledge
-from app.modules.retrieval.public import IndexChunk, Retrieval
+from app.modules.retrieval.public import IndexChunk, Retrieval, index_representatives
 
 from .errors import GateBusy, RecoveryFailed
 from .gate import Gate, Operation, State
@@ -24,7 +24,11 @@ def verify_consistency(snapshots, entries):
             continue
         if not snapshot.chunks_valid:
             raise RecoveryFailed('INVALID_STORED_CHUNKS')
-        for chunk in snapshot.chunks:
+        indexed = index_representatives(
+            IndexChunk(chunk.id, chunk.text, chunk.heading_path, document.tags) for chunk in snapshot.chunks)
+        by_id = {chunk.id: chunk for chunk in snapshot.chunks}
+        for representative in indexed:
+            chunk = by_id[representative.chunk_id]
             expected[chunk.id] = (document.id, chunk.seq, chunk.text, chunk.heading_path, document.tags)
     actual = {entry.chunk_id: (entry.document_id, entry.seq, entry.text, entry.heading_path, entry.tags)
               for entry in entries}
@@ -91,8 +95,8 @@ def rebuild_index(knowledge: Knowledge, retrieval: Retrieval) -> RebuildResult:
             writes = tuple(ChunkWrite(seq,c.text,c.byte_start,c.byte_end,c.heading_path,c.token_count)
                            for seq,c in enumerate(drafts))
             chunks = knowledge.begin_rebuild(document.id, writes, expected_content=document.content)
-            inputs = tuple(IndexChunk(c.id,c.text,c.heading_path,document.tags) for c in chunks)
-            if retrieval.replace(document.id, inputs) != len(chunks):
+            inputs = index_representatives(IndexChunk(c.id,c.text,c.heading_path,document.tags) for c in chunks)
+            if retrieval.replace(document.id, inputs) != len(inputs):
                 raise RecoveryFailed('REBUILT_COUNT_MISMATCH')
             knowledge.mark_indexed(document.id)
             total += len(chunks)

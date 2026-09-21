@@ -90,6 +90,46 @@ def test_failed_documents_may_keep_sql_chunks_but_have_no_queryable_vectors(work
     assert w.readiness.ready().state == State.READY
 
 
+@pytest.fixture
+def repeated(workflow):
+    w=workflow
+    texts=('dup','one','dup')
+    chunks=tuple(knowledge.StoredChunk(101+seq,1,seq,text,seq*3,seq*3+3,'',1) for seq,text in enumerate(texts))
+    w.a.snapshots.return_value=(knowledge.DocumentSnapshot(w.doc,chunks,True),)
+    w.b.split.return_value=tuple(retrieval.ChunkDraft(text,'',seq*3,seq*3+3,1) for seq,text in enumerate(texts))
+    w.a.begin_rebuild.return_value=chunks
+    w.entries=tuple(retrieval.IndexEntry(c.id,1,c.seq,c.text,'',('tag',)) for c in chunks)
+    return w
+
+
+def test_ready_expects_only_the_first_of_identical_chunks_in_the_index(repeated):
+    w=repeated
+    w.b.inspect.return_value=w.entries[:2]
+    assert w.readiness.ready().state == State.READY
+
+
+@pytest.mark.parametrize('kept', [(0,1,2),(1,2),(0,)])
+def test_stale_full_index_or_wrong_representative_requires_offline_recovery(repeated,kept):
+    w=repeated
+    w.b.inspect.return_value=tuple(w.entries[i] for i in kept)
+    with pytest.raises(RecoveryFailed):
+        w.readiness.ready()
+    assert w.gate.state == State.RECOVERY_REQUIRED
+
+
+def test_offline_rebuild_stores_every_chunk_but_embeds_identical_inputs_once(repeated):
+    w=repeated
+    w.b.replace.return_value=2
+    w.b.inspect.return_value=w.entries[:2]
+    result=rebuild_index(w.a,w.b)
+    assert result.documents == 1 and result.chunks == 3
+    assert len(w.a.begin_rebuild.call_args.args[1]) == 3
+    w.b.replace.assert_called_once_with(1,(retrieval.IndexChunk(101,'dup','',('tag',)),retrieval.IndexChunk(102,'one','',('tag',))))
+    w.b.replace.return_value=3
+    with pytest.raises(RecoveryFailed):
+        rebuild_index(w.a,w.b)
+
+
 def test_dependency_failure_does_not_reset_or_open_anything(workflow):
     w=workflow
     w.b.health.return_value={'status':'DOWN'}
