@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from threading import Lock
 from typing import Any
 
@@ -13,6 +15,19 @@ from chromadb.errors import NotFoundError
 
 from ._embedding import IndexChunk, _positive_id
 from ._settings import RetrievalSettings
+
+
+_PLATFORM = sys.platform
+
+
+def persistence_path_is_safe(path: Path, platform: str | None = None) -> bool:
+    """Observed with chromadb 1.5.9 on Windows (#74): under a directory containing non-ASCII
+    characters the HNSW .bin files are never written, while the metadata pickle, the segment
+    sequence number and the log purge all proceed, so the vectors vanish on the next restart.
+    The sqlite and pickle writers cope with the path; the bundled C++ hnswlib behind the Rust
+    bindings does not, presumably through a narrow-character file API. ASCII-only is the
+    conservative rule until upstream persists correctly (see the canary in test_retrieval)."""
+    return (platform or _PLATFORM) != "win32" or str(path).isascii()
 
 
 @dataclass(frozen=True)
@@ -36,6 +51,10 @@ class IndexEntry:
 
 class IndexMetadataMismatch(RuntimeError):
     """The existing collection was built with another model or dimension."""
+
+
+class UnsafePersistencePath(RuntimeError):
+    """The Chroma directory would lose HNSW files silently on this platform."""
 
 
 class ChunkIdConflict(ValueError):
@@ -75,6 +94,8 @@ class IndexStore:
             self._collection = None
 
     def _open_client(self):
+        if not persistence_path_is_safe(self._settings.chroma_dir):
+            raise UnsafePersistencePath("CHROMA_DIR must be an ASCII-only path on Windows")
         self._settings.chroma_dir.mkdir(parents=True, exist_ok=True)
         return chromadb.PersistentClient(
             path=str(self._settings.chroma_dir),
