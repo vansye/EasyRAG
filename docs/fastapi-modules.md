@@ -37,7 +37,7 @@ flowchart TD
 | 模块 | 私有资源和规则 | 公开能力 |
 |---|---|---|
 | A knowledge | document/chunk、SQLAlchemy、Alembic、正文解析、哈希、状态机、短事务 | 收录/查询/更新/软删、切片保存与索引终态、出处 |
-| B retrieval | 切片、tokenizer、embedding、Chroma、索引清理 | split、replace、delete_document、search、inspect、reset、health |
+| B retrieval | 切片、tokenizer、embedding、Chroma、索引清理、哪些片段进索引 | split、index_representatives、replace、delete_document、search、inspect、reset、health |
 | C qa | 提示词、判定、生成、拒答、引用编号、trace | answer(question, search, chat) |
 | F answer_models | 配置文件、凭据、地址解析、厂商 SDK | get/save/reset/open_session |
 | G application | HTTP 适配、装配、跨模块用例、门禁、单执行者、维护 CLI | 现有 REST、就绪、数据库接管与重建 |

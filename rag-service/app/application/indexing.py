@@ -6,7 +6,9 @@ from dataclasses import dataclass
 from threading import Lock
 
 from app.modules.knowledge.public import ChunkWrite, DocumentNotFound, IndexStateConflict, Knowledge
-from app.modules.retrieval.public import IndexChunk, IndexWriteError, Retrieval, RetrievalUnavailable
+from app.modules.retrieval.public import (
+    IndexChunk, IndexWriteError, Retrieval, RetrievalUnavailable, index_representatives,
+)
 
 from .gate import Gate, Lease, Operation
 
@@ -61,9 +63,10 @@ class Indexer:
                                           draft.heading_path, draft.token_count) for seq, draft in enumerate(drafts))
                 stage = 'SAVE_CHUNKS'
                 chunks = self._knowledge.begin_indexing(document_id, writes, expected_content=document.content)
-                inputs = tuple(IndexChunk(chunk.id, chunk.text, chunk.heading_path, document.tags) for chunk in chunks)
+                inputs = index_representatives(
+                    IndexChunk(chunk.id, chunk.text, chunk.heading_path, document.tags) for chunk in chunks)
                 stage = 'REPLACE_INDEX'
-                if self._retrieval.replace(document_id, inputs) != len(chunks):
+                if self._retrieval.replace(document_id, inputs) != len(inputs):
                     raise RuntimeError('indexed count mismatch')
                 stage = 'MARK_INDEXED'
                 self._knowledge.mark_indexed(document_id)
