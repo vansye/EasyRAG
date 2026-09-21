@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from typing import Any
 
 import httpx
@@ -154,3 +155,91 @@ class TestRetrieveFacade:
             retrieval.search("问题")
         assert error.value.component == "embedding"
         assert error.value.cause == "HTTPStatusError"
+
+
+class TestPersistencePathGuard:
+    """chromadb 1.5.9 在 Windows 下对非 ASCII 目录静默丢失 HNSW 文件（#74），必须在打开前拒绝。"""
+
+    @pytest.mark.parametrize("platform,path,safe", [
+        ("win32", "D:/easyrag-data/chroma", True),
+        ("win32", "D:/知识库/rag-service/data/chroma", False),
+        ("win32", "C:/Users/café/chroma", False),
+        ("linux", "/srv/个人项目/chroma", True),
+        ("darwin", "/Users/个人/chroma", True),
+    ])
+    def test_only_windows_requires_ascii_paths(self, platform, path, safe):
+        from pathlib import Path
+
+        from app.modules.retrieval._index_store import persistence_path_is_safe
+
+        assert persistence_path_is_safe(Path(path), platform=platform) is safe
+
+    def test_unsafe_path_is_refused_before_anything_is_written(self, tmp_path, monkeypatch):
+        from app.modules.retrieval import _index_store
+
+        monkeypatch.setattr(_index_store, "_PLATFORM", "win32")
+        chroma_dir = tmp_path / "个人知识库" / "chroma"
+        settings = RetrievalSettings(_env_file=None, chroma_dir=chroma_dir, embedding_model="test-embedding", embedding_dim=3)
+
+        store = IndexStore(settings)
+        try:
+            assert store.probe() == {"status": "DOWN", "collection": settings.collection_name, "error": "UnsafePersistencePath"}
+            with pytest.raises(_index_store.UnsafePersistencePath):
+                store.reset()
+        finally:
+            store.close()
+        assert not chroma_dir.exists()
+
+        module = Retrieval(settings)
+        try:
+            assert module.health()["chroma"]["error"] == "UnsafePersistencePath"
+            with pytest.raises(RetrievalUnavailable) as error:
+                module.search("问题")
+            assert (error.value.component, error.value.cause) == ("index", "UnsafePersistencePath")
+        finally:
+            module.close()
+
+    def test_ascii_path_on_windows_opens_normally(self, tmp_path, monkeypatch):
+        from app.modules.retrieval import _index_store
+
+        monkeypatch.setattr(_index_store, "_PLATFORM", "win32")
+        settings = RetrievalSettings(_env_file=None, chroma_dir=tmp_path / "chroma", embedding_model="test-embedding", embedding_dim=3)
+        store = IndexStore(settings)
+        try:
+            assert store.probe()["status"] == "UP"
+        finally:
+            store.close()
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="只有 Windows 的窄字符文件 API 会丢字")
+    def test_upstream_canary_chromadb_still_loses_vectors_under_non_ascii_directory(self, tmp_path):
+        """绕过守门直接写 chromadb，证明缺陷仍在；本用例一旦失败，说明上游已修复、守门可以放开。"""
+        import ctypes
+
+        import chromadb
+        from chromadb.config import Settings as ChromaSettings
+
+        if ctypes.windll.kernel32.GetACP() == 65001:
+            pytest.skip("系统 ANSI 代码页已是 UTF-8，非 ASCII 路径不再丢字")
+        directory = tmp_path / "个人知识库" / "chroma"
+        directory.mkdir(parents=True)
+        # 阈值降到 10，写 20 条即触发落盘与日志清理，不必写满默认的 1000 条。
+        metadata = {"hnsw:space": "cosine", "hnsw:sync_threshold": 10, "hnsw:batch_size": 5}
+
+        def open_collection():
+            client = chromadb.PersistentClient(path=str(directory), settings=ChromaSettings(anonymized_telemetry=False))
+            return client, client.get_or_create_collection("canary", metadata=metadata)
+
+        client, collection = open_collection()
+        collection.upsert(ids=[str(i) for i in range(20)], embeddings=[[float(i), 1.0, 0.5] for i in range(20)])
+        assert collection.count() == 20
+        client.close()
+        written = {file.name for segment in directory.iterdir() if segment.is_dir() for file in segment.iterdir()}
+        assert "index_metadata.pickle" in written
+        assert "data_level0.bin" not in written
+        try:
+            client, collection = open_collection()
+            survived = collection.count()
+            client.close()
+        except Exception:  # noqa: BLE001 - 上游抛的是 chromadb.errors.InternalError，类型本身不是契约
+            survived = None
+        assert survived != 20

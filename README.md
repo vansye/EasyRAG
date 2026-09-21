@@ -69,6 +69,8 @@ Copy-Item .env.example .env
 
 在 `.env` 填入 `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_DATABASE`、`MYSQL_USER`、`MYSQL_PASSWORD`。配置不入库。Linux/macOS 使用 `.venv/bin/python` 和 `cp .env.example .env`；下列 Python 命令对应替换即可。
 
+Windows 下 `CHROMA_DIR` 必须是纯 ASCII 路径（默认值在项目目录下，若项目路径含中文请显式改为如 `D:/easyrag-data/chroma`）：chromadb 1.5.9 在非 ASCII 目录下写不出 HNSW 文件且不报错，重启后向量丢失。后端在这种路径下拒绝打开索引，`/health` 的 `chroma.error` 为 `UnsafePersistencePath`。
+
 首次空库初始化：
 
 ```powershell
@@ -129,7 +131,7 @@ npm run dev -- --host 127.0.0.1 --port 5173
 .\.venv\Scripts\python.exe -m app.maintenance rebuild-index
 ```
 
-接管只用于支持的旧库；重建用于缺失/多余/过时向量、遗留 INDEXING 或切片/embedding 配置改变。重建保留能证明与当前正文和切片参数完全匹配的 ID，否则重新切片。失败返回非零退出码，重新启动也不会自动放行。没有公开 `/reset`、`/embed`、`/chunk` 等内部操作接口。
+接管只用于支持的旧库；重建用于缺失/多余/过时向量、遗留 INDEXING 或切片/embedding 配置改变，也用于索引无法加载（`/health` 的 `chroma.error` 为 `InternalError`，例如曾在非 ASCII 路径下持久化）。重建保留能证明与当前正文和切片参数完全匹配的 ID，否则重新切片。失败返回非零退出码，重新启动也不会自动放行。没有公开 `/reset`、`/embed`、`/chunk` 等内部操作接口。
 
 [API 文档](docs/api.md) 说明参数、状态码和响应字段；在线路由与请求结构位于 `http://127.0.0.1:8080/docs`。
 
