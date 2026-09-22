@@ -107,7 +107,98 @@ class _FakeEmbeddingTransport(httpx.BaseTransport):
         return httpx.Response(200, json={"embeddings": [self.vector]})
 
 
+def _seed_hybrid_corpus(index):
+    """一篇 Redis 专篇（向量高度相关）压制一张 OS Buffer 短卡（措辞精确命中）——Q21 的最小复刻。"""
+    redis = [IndexChunk(chunk_id=101 + seq, text=f"Redis 持久化第 {seq} 节：RDB 与 AOF 的数据丢失窗口。",
+                        heading_path="持久化") for seq in range(4)]
+    index.replace_document(1, redis, [[1.0, 0.1 * seq, 0.0] for seq in range(4)])
+    index.replace_document(2, [IndexChunk(chunk_id=201, text="数据写入缓冲区即返回成功，断电易丢数据；fsync 强制立即落盘。",
+                                          heading_path="重点")], [[0.0, 0.0, 1.0]])
+    index.replace_document(3, [IndexChunk(chunk_id=301, text="Pinia 管理组件之间共享的状态。", heading_path="")],
+                           [[0.0, 1.0, 0.0]])
+
+
+class TestHybridQuery:
+
+    def test_lexical_only_hit_enters_top_k_with_its_real_cosine_score(self, index):
+        _seed_hybrid_corpus(index)
+        question = [1.0, 0.0, 0.0]
+
+        dense = index.query(question, top_k=3)
+        fused = index.query(question, top_k=3, lexical_query="断电后数据还是可能丢？怎么强制立即落盘？")
+
+        assert 201 not in [hit.chunk_id for hit in dense]
+        assert 201 in [hit.chunk_id for hit in fused]
+        assert 301 not in [hit.chunk_id for hit in fused]
+        os_buffer = next(hit for hit in fused if hit.chunk_id == 201)
+        assert os_buffer.score == pytest.approx(0.0, abs=1e-6)
+        assert os_buffer.text.startswith("数据写入缓冲区") and os_buffer.heading_path == "重点"
+        assert len(fused) == 3 and len({hit.chunk_id for hit in fused}) == 3
+
+    def test_fused_order_rewards_agreement_of_both_channels(self, index):
+        _seed_hybrid_corpus(index)
+        fused = index.query([1.0, 0.0, 0.0], top_k=2, lexical_query="Redis RDB AOF 数据丢失窗口")
+        assert [hit.document_id for hit in fused] == [1, 1]
+        assert fused[0].score >= fused[1].score
+
+    def test_lexical_index_follows_replace_delete_and_reset(self, index):
+        _seed_hybrid_corpus(index)
+        lexical = "fsync 强制立即落盘"
+        assert 201 in [hit.chunk_id for hit in index.query([1.0, 0.0, 0.0], top_k=2, lexical_query=lexical)]
+
+        index.replace_document(2, [IndexChunk(chunk_id=201, text="改写后的正文不再提到那个系统调用。", heading_path="重点")],
+                               [[0.0, 0.0, 1.0]])
+        assert 201 not in [hit.chunk_id for hit in index.query([1.0, 0.0, 0.0], top_k=2, lexical_query=lexical)]
+
+        index.replace_document(2, [IndexChunk(chunk_id=201, text="fsync 强制立即落盘。", heading_path="重点")],
+                               [[0.0, 0.0, 1.0]])
+        index.delete_document(2)
+        assert 201 not in [hit.chunk_id for hit in index.query([1.0, 0.0, 0.0], top_k=5, lexical_query=lexical)]
+
+        index.reset()
+        assert index.query([1.0, 0.0, 0.0], top_k=5, lexical_query=lexical) == ()
+        index.replace_document(2, [IndexChunk(chunk_id=201, text="fsync 强制立即落盘。", heading_path="")], [[0.0, 0.0, 1.0]])
+        assert [hit.chunk_id for hit in index.query([1.0, 0.0, 0.0], top_k=5, lexical_query=lexical)] == [201]
+
+    def test_reopened_store_rebuilds_lexical_index_from_persisted_payload(self, settings, index):
+        _seed_hybrid_corpus(index)
+        index.close()
+        reopened = IndexStore(settings)
+        try:
+            fused = reopened.query([1.0, 0.0, 0.0], top_k=3, lexical_query="fsync 强制立即落盘")
+            assert 201 in [hit.chunk_id for hit in fused]
+        finally:
+            reopened.close()
+
+    def test_lexical_query_without_matches_or_without_index_falls_back_to_dense(self, index):
+        _seed_hybrid_corpus(index)
+        dense = index.query([1.0, 0.0, 0.0], top_k=3)
+        assert index.query([1.0, 0.0, 0.0], top_k=3, lexical_query="完全无关的问题") == dense
+        index.reset()
+        assert index.query([1.0, 0.0, 0.0], top_k=3, lexical_query="fsync") == ()
+
+
 class TestRetrieveFacade:
+
+    def test_hybrid_strategy_passes_the_question_to_the_lexical_channel(self, settings, monkeypatch):
+        settings.retrieval_strategy = "hybrid"
+        retrieval = Retrieval(settings)
+        try:
+            _seed_hybrid_corpus(retrieval._index)
+            transport = _FakeEmbeddingTransport([1.0, 0.0, 0.0])
+            original_client = httpx.Client
+            monkeypatch.setattr(httpx, "Client", lambda **kwargs: original_client(transport=transport, **kwargs))
+            timings = {}
+            hits = retrieval.search("断电后怎么强制立即落盘？", top_k=3,
+                                    record_timing=lambda stage, ms: timings.__setitem__(stage, ms))
+            assert 201 in [hit.chunk_id for hit in hits]
+            assert transport.received == ["断电后怎么强制立即落盘？"]
+            assert set(timings) == {"embedding", "vector"}
+            assert retrieval.runtime_info()["strategy"] == "hybrid"
+            settings.retrieval_strategy = "dense"
+            assert 201 not in [hit.chunk_id for hit in retrieval.search("断电后怎么强制立即落盘？", top_k=3)]
+        finally:
+            retrieval.close()
 
     def test_retrieves_through_embedding_and_index(self, retrieval, monkeypatch):
         retrieval._index._collection.add(

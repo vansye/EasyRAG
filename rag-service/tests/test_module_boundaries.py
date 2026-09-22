@@ -35,7 +35,7 @@ def violations(source: str, package: str, owner: str | None, *, evaluation=False
                 denied.append(target)
             if root in {"sqlalchemy", "pymysql", "alembic"} and owner != "knowledge":
                 denied.append(target)
-            if root in {"chromadb", "tokenizers"} and owner != "retrieval":
+            if root in {"chromadb", "tokenizers", "jieba", "rank_bm25"} and owner != "retrieval":
                 denied.append(target)
             if (root.startswith("langchain") or root in {"openai", "httpx2"}) and owner != "answer_models":
                 denied.append(target)
@@ -44,7 +44,8 @@ def violations(source: str, package: str, owner: str | None, *, evaluation=False
                 parts = target.split(".")
                 if len(parts) < 4 or parts[3] != "public":
                     denied.append(target)
-            if not evaluation and (root in {"sqlalchemy", "pymysql", "alembic", "chromadb", "tokenizers", "openai", "httpx2"}
+            if not evaluation and (root in {"sqlalchemy", "pymysql", "alembic", "chromadb", "tokenizers", "jieba", "rank_bm25",
+                                            "openai", "httpx2"}
                                    or root.startswith("langchain")):
                 denied.append(target)
     return denied
@@ -56,6 +57,8 @@ def violations(source: str, package: str, owner: str | None, *, evaluation=False
     ("from app.application import gate", "app.modules.knowledge", "knowledge"),
     ("from fastapi import HTTPException", "app.modules.answer_models", "answer_models"),
     ("import sqlalchemy", "app.modules.retrieval", "retrieval"),
+    ("import jieba", "app.modules.qa", "qa"),
+    ("from rank_bm25 import BM25Okapi", "app.application", None),
     ("from langchain_core.messages import HumanMessage", "app.modules.qa", "qa"),
     ("from app.modules.knowledge._database import engine", "app.application", None),
     ("from ..modules import knowledge", "app.application", None),

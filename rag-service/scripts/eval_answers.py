@@ -446,6 +446,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--min-tokens", type=int, default=64)
     parser.add_argument("--timeout-seconds", type=float, default=180)
     parser.add_argument("--top-k", type=int, default=5)
+    parser.add_argument("--strategy", choices=("dense", "hybrid"), help="检索策略；默认与服务相同")
     parser.add_argument("--faithfulness", action="store_true")
     parser.add_argument("--pause", type=float, default=1.0, help="相邻模型调用之间的停顿秒数，避免触发上游限流")
     parser.add_argument("--cooldown", type=float, default=15.0, help="上游不可用时的退避基数秒数（乘以尝试次数）")
@@ -499,6 +500,7 @@ def main(argv: list[str] | None = None) -> int:
         chunk_max_tokens=arguments.max_tokens, chunk_min_tokens=arguments.min_tokens,
         embedding_provider="ollama", embedding_model=arguments.model, embedding_dim=arguments.dimensions,
         embedding_base_url=arguments.ollama_url, embedding_timeout_seconds=arguments.timeout_seconds,
+        **({"retrieval_strategy": arguments.strategy} if arguments.strategy else {}),
     )
     retrieval = Retrieval(settings)
     results: list[QuestionResult] = []
@@ -537,7 +539,8 @@ def main(argv: list[str] | None = None) -> int:
     command = [".\\.venv\\Scripts\\python.exe -m scripts.eval_answers",
                "--golden-set " + " ".join(_quote("../docs/eval/" + path.name) for path in arguments.golden_set),
                f"--tokenizer {_quote(tokenizer_argument)}", f"--model {_quote(arguments.model)}",
-               f"--dimensions {arguments.dimensions}", f"--top-k {arguments.top_k}"]
+               f"--dimensions {arguments.dimensions}", f"--top-k {arguments.top_k}",
+               f"--strategy {settings.retrieval_strategy}"]
     if arguments.faithfulness:
         command.append("--faithfulness")
     command.append(f"--pause {arguments.pause} --cooldown {arguments.cooldown} --max-attempts {arguments.max_attempts}")
@@ -550,7 +553,7 @@ def main(argv: list[str] | None = None) -> int:
         "parameters": {
             "llm_provider": model_info["provider"] if model_info else None,
             "llm_model": model_info["model"] if model_info else None,
-            "retrieval_strategy": getattr(settings, "retrieval_strategy", "dense"),
+            "retrieval_strategy": settings.retrieval_strategy,
             "embedding_model": arguments.model, "embedding_dim": arguments.dimensions,
             "top_k": arguments.top_k, "faithfulness": arguments.faithfulness, "only": arguments.only,
             "pause": arguments.pause, "cooldown": arguments.cooldown, "max_attempts": arguments.max_attempts,

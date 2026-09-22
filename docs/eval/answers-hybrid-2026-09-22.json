@@ -1,0 +1,3496 @@
+{
+ "generated_at": "2026-09-22T11:26:59+08:00",
+ "parameters": {
+  "llm_provider": "openai",
+  "llm_model": "agnes-3.0-flash",
+  "retrieval_strategy": "hybrid",
+  "embedding_model": "bge-m3",
+  "embedding_dim": 1024,
+  "top_k": 5,
+  "faithfulness": true,
+  "only": null,
+  "pause": 1.0,
+  "cooldown": 15.0,
+  "max_attempts": 3,
+  "max_tokens": 512,
+  "min_tokens": 64,
+  "tokenizer_sha256": "21106b6d7dab2952c1d496fb21d5dc9db75c28ed361a05f5020bbba27810dd08"
+ },
+ "document_count": 29,
+ "chunk_count": 222,
+ "index_seconds": 32.69624930000282,
+ "corpus_sha256": "3d4b803355606400354a4b4f73f4fde54fc92e352f43ac80e1dd60ffda123425",
+ "golden_sha256": {
+  "golden-set-v1.md": "69b4e8f1a979305f33008c76a2bf45ea8aa5bc77ffe6b3e36ec11ab3239347e3",
+  "golden-set-v2-heldout.md": "f35262e05a6785f03a78d2738fa64337440e5dfa424d15a40f49da123909bbfd"
+ },
+ "results": [
+  {
+   "question_id": "Q1",
+   "category": "Q",
+   "text": "什么是 ACID？数据库事务的四个特性分别是什么？",
+   "expected_source": "数据库/知识条目/ACID.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "ACID 是数据库事务正确执行的四个关键特性的首字母缩写，它是关系型数据库（RDBMS）的核心基石，用于保证一组数据库操作要么全部成功，要么全部失败 [1]。ACID 也是关系型数据库保证事务可靠执行的四大核心特性，确保数据在并发和故障场景下依然保持正确与完整 [2]。\n\n这四个特性分别是：\n\n1.  **原子性（Atomicity）**：事务中的所有操作视为一个不可分割的整体。要么全部执行成功，要么在发生错误时全部回滚，不存在“执行一半”的状态 [3]。\n2.  **一致性（Consistency）**：事务必须使数据库从一个正确的状态转换到另一个正确的状态，需确保数据完整性约束（如外键、唯一索引、触发器）不被破坏 [3]。\n3.  **隔离性（Isolation）**：多个并发事务同时执行时，彼此的操作相互隔离，互不干扰 [3]。\n4.  **持久性（Durability）**：事务一旦提交，其对数据库的更改就是永久的，即使系统发生崩溃或断电，数据也不会丢失 [3]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 204,
+     "source": "数据库/知识条目/ACID.md",
+     "seq": 2,
+     "score": 0.823166
+    },
+    {
+     "rank": 2,
+     "chunk_id": 203,
+     "source": "数据库/知识条目/ACID.md",
+     "seq": 1,
+     "score": 0.815235
+    },
+    {
+     "rank": 3,
+     "chunk_id": 205,
+     "source": "数据库/知识条目/ACID.md",
+     "seq": 3,
+     "score": 0.717762
+    },
+    {
+     "rank": 4,
+     "chunk_id": 211,
+     "source": "数据库/知识条目/Redis 事务.md",
+     "seq": 2,
+     "score": 0.613754
+    },
+    {
+     "rank": 5,
+     "chunk_id": 210,
+     "source": "数据库/知识条目/Redis 事务.md",
+     "seq": 1,
+     "score": 0.583567
+    }
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    2,
+    3
+   ],
+   "cited_sources": [
+    "数据库/知识条目/ACID.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 2069.402299996,
+   "total_ms": 7269.8118000116665,
+   "stage_ms": {
+    "vector": 15.656400035368279,
+    "embedding": 724.9882000032812,
+    "judge": 863.4281000122428,
+    "generate": 5662.115599989193
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 1333,
+   "sentences": 7,
+   "uncited_sentences": 1,
+   "supported": 6,
+   "unsupported": 0,
+   "support_invalid": 0,
+   "support_calls": 6,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "Q2",
+   "category": "Q",
+   "text": "KV Cache 是什么？它解决什么问题？",
+   "expected_source": "大模型应用/知识条目/KV Cache.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "**KV Cache 的定义**\nKV Cache 是在自回归语言模型（如 GPT、LLaMA）推理过程中，将前面已生成 Token 的 Key（键）和 Value（值）矩阵保存下来，供后续 Token 生成时重复使用的一种缓存机制 [1]。\n\n**解决的问题**\n1.  **避免重复计算与算力浪费**：在没有 KV Cache 的情况下，生成第 N 个 Token 时，模型需要把前 N-1 个 Token 的完整序列重新输入计算一遍，且前面的计算结果（K、V）实际上没有变化，导致极度浪费算力 [5]。\n2.  **降低计算复杂度**：如果没有 KV Cache，计算复杂度为 O(N²)；引入 KV Cache 后，每个 Token 的 K、V 只在第一次出现时计算一次，后续直接复用，复杂度降为 O(N) [5]。\n3.  **提升生成速度**：通过复用缓存中的值，生成速度可提升数十倍甚至上百倍 [5]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 116,
+     "source": "大模型应用/知识条目/KV Cache.md",
+     "seq": 1,
+     "score": 0.695766
+    },
+    {
+     "rank": 2,
+     "chunk_id": 121,
+     "source": "大模型应用/知识条目/KV Cache.md",
+     "seq": 6,
+     "score": 0.634857
+    },
+    {
+     "rank": 3,
+     "chunk_id": 125,
+     "source": "大模型应用/知识条目/KV Cache.md",
+     "seq": 10,
+     "score": 0.606967
+    },
+    {
+     "rank": 4,
+     "chunk_id": 123,
+     "source": "大模型应用/知识条目/KV Cache.md",
+     "seq": 8,
+     "score": 0.633377
+    },
+    {
+     "rank": 5,
+     "chunk_id": 117,
+     "source": "大模型应用/知识条目/KV Cache.md",
+     "seq": 2,
+     "score": 0.651958
+    }
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    5
+   ],
+   "cited_sources": [
+    "大模型应用/知识条目/KV Cache.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 2894.672599999467,
+   "total_ms": 13818.053700000746,
+   "stage_ms": {
+    "vector": 5.641700001433492,
+    "embedding": 1022.4201999953948,
+    "judge": 1295.0130999961402,
+    "generate": 11493.373100005556
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 1272,
+   "sentences": 4,
+   "uncited_sentences": 0,
+   "supported": 4,
+   "unsupported": 0,
+   "support_invalid": 0,
+   "support_calls": 4,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "Q3",
+   "category": "Q",
+   "text": "Redis 的持久化方式有哪两种？各有什么特点？",
+   "expected_source": "数据库/Redis/Redis持久化.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "Redis 的持久化方式主要有 **RDB（快照持久化）** 和 **AOF（追加日志持久化）** 两种 [2]。此外，Redis 4.0+ 还引入了 **混合持久化** 机制 [5]。\n\n各方式的特点如下：\n\n1.  **RDB（快照持久化）**\n    *   属于快照式持久化 [3]。\n    *   生成的文件小，恢复速度快 [3]。\n    *   数据丢失窗口较大，通常在分钟级 [3]。\n    *   适合用于数据备份和灾备场景 [3]。\n\n2.  **AOF（追加日志持久化）**\n    *   属于命令日志式持久化 [3]。\n    *   数据安全性高，若采用 `everysec` 策略，最多只丢失 1 秒的数据 [3]。\n    *   生成的文件较大，恢复速度相对较慢 [3]。\n    *   需要定期进行 AOF 重写以维护文件大小，可通过自动触发或手动执行 `BGREWRITEAOF` 命令完成 [3]。\n\n3.  **混合持久化（补充说明）**\n    *   这是 Redis 4.0 引入的方案，结合了 RDB 快照和 AOF 日志 [5]。\n    *   在 AOF 重写时，先写入 RDB 格式的全量数据，再追加 AOF 增量日志 [5]。\n    *   该方式兼顾了恢复速度（先加载 RDB）和数据安全性（再重放 AOF），是生产环境的推荐方案 [3][5]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 148,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 1,
+     "score": 0.704504
+    },
+    {
+     "rank": 2,
+     "chunk_id": 149,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 2,
+     "score": 0.668889
+    },
+    {
+     "rank": 3,
+     "chunk_id": 176,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 29,
+     "score": 0.705213
+    },
+    {
+     "rank": 4,
+     "chunk_id": 150,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 3,
+     "score": 0.67979
+    },
+    {
+     "rank": 5,
+     "chunk_id": 163,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 16,
+     "score": 0.655764
+    }
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    2,
+    3,
+    5
+   ],
+   "cited_sources": [
+    "数据库/Redis/Redis持久化.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 5942.01100000646,
+   "total_ms": 11679.510099987965,
+   "stage_ms": {
+    "vector": 4.963199986377731,
+    "embedding": 1008.8733999873511,
+    "judge": 4078.2458999892697,
+    "generate": 6584.229600004619
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 1851,
+   "sentences": 13,
+   "uncited_sentences": 0,
+   "supported": 10,
+   "unsupported": 3,
+   "support_invalid": 0,
+   "support_calls": 13,
+   "unsupported_sentences": [
+    {
+     "sentence": "Redis 的持久化方式主要有 **RDB（快照持久化）** 和 **AOF（追加日志持久化）** 两种 [2]。",
+     "ranks": [
+      2
+     ]
+    },
+    {
+     "sentence": "适合用于数据备份和灾备场景 [3]。",
+     "ranks": [
+      3
+     ]
+    },
+    {
+     "sentence": "该方式兼顾了恢复速度（先加载 RDB）和数据安全性（再重放 AOF），是生产环境的推荐方案 [3][5]。",
+     "ranks": [
+      3,
+      5
+     ]
+    }
+   ]
+  },
+  {
+   "question_id": "Q4",
+   "category": "Q",
+   "text": "事务的隔离级别有哪些？哪个并发性能最差？",
+   "expected_source": "数据库/知识条目/ACID.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "根据知识库片段 [1]，SQL 标准定义了四个隔离级别，从低到高依次为：\n1. 读未提交\n2. 读已提交\n3. 可重复读\n4. 串行化\n\n在这些级别中，级别越高，并发性能越差 [1]。因此，**串行化**（Serialized）是并发性能最差的隔离级别 [1]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 205,
+     "source": "数据库/知识条目/ACID.md",
+     "seq": 3,
+     "score": 0.55758
+    },
+    {
+     "rank": 2,
+     "chunk_id": 203,
+     "source": "数据库/知识条目/ACID.md",
+     "seq": 1,
+     "score": 0.54359
+    },
+    {
+     "rank": 3,
+     "chunk_id": 212,
+     "source": "数据库/知识条目/Redis 事务.md",
+     "seq": 3,
+     "score": 0.507957
+    },
+    {
+     "rank": 4,
+     "chunk_id": 211,
+     "source": "数据库/知识条目/Redis 事务.md",
+     "seq": 2,
+     "score": 0.494884
+    },
+    {
+     "rank": 5,
+     "chunk_id": 210,
+     "source": "数据库/知识条目/Redis 事务.md",
+     "seq": 1,
+     "score": 0.497169
+    }
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1
+   ],
+   "cited_sources": [
+    "数据库/知识条目/ACID.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 4534.887500019977,
+   "total_ms": 5596.1758000194095,
+   "stage_ms": {
+    "vector": 4.427799984114245,
+    "embedding": 1133.4872000152245,
+    "judge": 2915.1868999761064,
+    "generate": 1541.4928999962285
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 1892,
+   "sentences": 5,
+   "uncited_sentences": 3,
+   "supported": 1,
+   "unsupported": 1,
+   "support_invalid": 0,
+   "support_calls": 2,
+   "unsupported_sentences": [
+    {
+     "sentence": "因此，**串行化**（Serialized）是并发性能最差的隔离级别 [1]。",
+     "ranks": [
+      1
+     ]
+    }
+   ]
+  },
+  {
+   "question_id": "Q5",
+   "category": "Q",
+   "text": "Docker 镜像和容器是什么关系？",
+   "expected_source": "JavaWeb/知识条目/部署/Docker/Docker 镜像.md",
+   "decision": "PARTIAL",
+   "status": "PARTIAL",
+   "failure": null,
+   "answer": "根据提供的知识库片段，Docker 镜像与容器之间的关系主要体现为**“只读模板”与“基于模板创建的实例”**的关系。具体事实如下：\n\n1.  **镜像是容器的创建基础**：Docker 镜像被明确定义为用于创建容器的只读模板 [1]。它是容器化应用打包和分发的基础单元 [1]。\n2.  **包含运行所需内容**：镜像是一个轻量级、只读的独立软件包，包含了运行应用程序所需的所有内容，包括代码、运行时、系统工具、库和设置 [3]。\n3.  **结构特性**：镜像基于 UnionFS 分层文件系统构建 [1][3]。这种分层结构使得层可以被多个镜像共用，从而节省存储空间并加速构建与分发 [3][2]。\n4.  **生命周期独立性（关于数据的补充）**：虽然片段主要描述镜像，但结合数据卷片段可知，容器中的数据持久化依赖于独立于容器生命周期的数据卷，而镜像本身作为只读模板，其结构（层）在构建和分发中具有可复用性 [1][3][4]。\n\n**覆盖边界声明：**\n现有片段主要聚焦于 Docker 镜像的定义、构建原理（分层、Dockerfile）、命名规则及数据卷的概念。片段中**未包含**以下关于镜像与容器关系的具体细节，因此无法基于现有知识库回答：\n*   容器运行时（Runtime）的具体工作机制。\n*   容器与镜像在网络、文件系统层面的具体挂载细节（如读写层 OverlayFS 的具体操作）。\n*   从镜像启动容器的完整底层技术流程（如 `docker create` 的具体内部步骤）。\n*   容器状态（运行中、停止等）与镜像状态的直接交互机制。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 72,
+     "source": "JavaWeb/知识条目/部署/Docker/Docker 镜像.md",
+     "seq": 1,
+     "score": 0.772608
+    },
+    {
+     "rank": 2,
+     "chunk_id": 74,
+     "source": "JavaWeb/知识条目/部署/Docker/Docker 镜像.md",
+     "seq": 3,
+     "score": 0.644402
+    },
+    {
+     "rank": 3,
+     "chunk_id": 73,
+     "source": "JavaWeb/知识条目/部署/Docker/Docker 镜像.md",
+     "seq": 2,
+     "score": 0.730206
+    },
+    {
+     "rank": 4,
+     "chunk_id": 70,
+     "source": "JavaWeb/知识条目/部署/Docker/Docker 数据卷（Volume）.md",
+     "seq": 1,
+     "score": 0.638566
+    },
+    {
+     "rank": 5,
+     "chunk_id": 71,
+     "source": "JavaWeb/知识条目/部署/Docker/Docker 数据卷（Volume）.md",
+     "seq": 2,
+     "score": 0.585898
+    }
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "cited_sources": [
+    "JavaWeb/知识条目/部署/Docker/Docker 数据卷（Volume）.md",
+    "JavaWeb/知识条目/部署/Docker/Docker 镜像.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 1992.9257000039797,
+   "total_ms": 57922.42270000861,
+   "stage_ms": {
+    "vector": 8.873600017977878,
+    "embedding": 805.2901000191923,
+    "judge": 663.8594999967609,
+    "generate": 56431.92619999172
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 2332,
+   "sentences": 12,
+   "uncited_sentences": 6,
+   "supported": 6,
+   "unsupported": 0,
+   "support_invalid": 0,
+   "support_calls": 6,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "Q6",
+   "category": "Q",
+   "text": "LCEL 是什么？",
+   "expected_source": "大模型应用/知识条目/LangChain 1.0 LCEL 表达式语言.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "LCEL 的全称是 **LangChain Expression Language（LangChain 表达式语言）**，它是 LangChain 1.0 引入的核心语法，主要用于以声明式的方式组合和构建 LLM 工作流 [1]。\n\n以下是关于 LCEL 的具体说明：\n\n1.  **本质与运作机制**：LCEL 本质上是一套基于**管道操作符（`|`）**的语法，它将实现了 **Runnable 接口** 的组件（如提示词模板、模型、输出解析器等）串联成一条“链” [1]。其核心思想是“描述应该发生什么，而不是如何发生”，旨在让开发者用更简洁、更 Pythonic 的方式构建复杂的 AI 应用 [1]。Runnable 协议是 LCEL 能够运作的基础，它规定了所有可被“运行”的组件都必须实现相同的调用接口 [4]。\n2.  **核心优势**：\n    *   **原生流式传输**：用 LCEL 构建的链天然支持流式输出，可以逐字返回结果 [3]。\n    *   **自动并行执行**：当链中存在可并行的分支时，LCEL 会自动优化并行执行以降低延迟 [3]。\n    *   **异步与批量支持**：LCEL 链原生支持 `ainvoke`、`abatch` 等异步和批量操作，便于处理高并发场景 [3]。\n    *   **可观测性**：链中的所有步骤会自动集成 LangSmith 追踪，方便调试和监控 [3]。\n3.  **适用场景**：LCEL 最适合线性或简单分支的编排任务，例如标准的 RAG 流程或问答链 [3]。对于需要复杂状态管理或多智能体协作的场景，通常推荐使用 LangGraph，但两者可以结合使用，即在 LangGraph 的节点内部使用 LCEL 构建具体逻辑 [3]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 129,
+     "source": "大模型应用/知识条目/LangChain 1.0 LCEL 表达式语言.md",
+     "seq": 2,
+     "score": 0.686714
+    },
+    {
+     "rank": 2,
+     "chunk_id": 128,
+     "source": "大模型应用/知识条目/LangChain 1.0 LCEL 表达式语言.md",
+     "seq": 1,
+     "score": 0.539079
+    },
+    {
+     "rank": 3,
+     "chunk_id": 130,
+     "source": "大模型应用/知识条目/LangChain 1.0 LCEL 表达式语言.md",
+     "seq": 3,
+     "score": 0.597743
+    },
+    {
+     "rank": 4,
+     "chunk_id": 143,
+     "source": "大模型应用/知识条目/Runnable 协议.md",
+     "seq": 2,
+     "score": 0.482474
+    },
+    {
+     "rank": 5,
+     "chunk_id": 146,
+     "source": "大模型应用/知识条目/Tools.md",
+     "seq": 2,
+     "score": 0.439122
+    }
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    3,
+    4
+   ],
+   "cited_sources": [
+    "大模型应用/知识条目/LangChain 1.0 LCEL 表达式语言.md",
+    "大模型应用/知识条目/Runnable 协议.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 2577.716200001305,
+   "total_ms": 7812.453600025037,
+   "stage_ms": {
+    "vector": 11.005900014424697,
+    "embedding": 825.7915000140201,
+    "judge": 668.7695999862626,
+    "generate": 6300.899900001241
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 1970,
+   "sentences": 10,
+   "uncited_sentences": 0,
+   "supported": 10,
+   "unsupported": 0,
+   "support_invalid": 0,
+   "support_calls": 10,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "Q7",
+   "category": "Q",
+   "text": "Prompt Template 是什么？为什么需要它？",
+   "expected_source": "大模型应用/知识条目/PromptTemplate 提示词模板.md",
+   "decision": "PARTIAL",
+   "status": "PARTIAL",
+   "failure": null,
+   "answer": "基于提供的知识库片段，回答如下：\n\n**Prompt Template 是什么？**\n\n1.  **定义与核心用法**：`PromptTemplate` 是一个用于创建包含占位符的字符串模板的组件。通过调用其 `format()` 方法并传入变量值，可以生成最终的提示词字符串 [1]。\n2.  **关键特性**：\n    *   支持**部分变量（Partial Variables）**，允许预先固定某些变量值，生成一个“部分填充”的新模板 [1]。\n    *   支持多种**模板格式（Template Format）**，包括 Python 的 `.format()`、Jinja2 以及 F-string 等，其中默认使用 `.format()` 风格 [1]。\n    *   具备**输入变量验证**功能，在创建时会验证 `input_variables` 是否与模板中的占位符匹配，提供早期错误反馈 [1]。\n3.  **定位与关系**：在 LangChain 1.0 中，`PromptTemplate` 被保留为专门处理**纯文本提示词**的组件 [1]。它常与其他组件配合使用，例如先生成文本内容，再封装为消息角色（如 `HumanMessage`）放入消息列表 [1]。\n\n**为什么需要它？**\n\n1.  **模块化与复用**：它允许开发者创建可复用的提示词结构。通过“部分变量”特性，在需要复用同一模板但某些变量值固定的场景下非常有用 [1]。\n2.  **开发效率与安全性**：通过输入变量验证，它能在开发早期发现占位符与变量不匹配的问题，提供早期错误反馈，从而提高开发效率 [1]。\n3.  **简化提示词管理**：它将提示词结构化管理，通过统一的 `format` 方法注入动态内容，比直接拼接字符串更规范 [1]。\n\n**覆盖边界声明：**\n以上回答仅基于提供的知识库片段 [1] 中关于 `PromptTemplate` 的信息。\n*   片段 [2] 虽然展示了 `PromptTemplate` 在 `ConversationSummaryMemory` 中的用法，但主要描述的是摘要内存的工作机制，未直接解释 `PromptTemplate` 本身存在的通用理由。\n*   片段 [3]、[4]、[5] 主要涉及 Agent 创建参数、可选配置以及 LCEL 管道操作符，未直接讨论 `PromptTemplate` 的定义或必要性。\n*   因此，关于“为什么需要它”的回答主要依据片段 [1] 中列出的“关键特性”及其带来的便利（如复用、验证、纯文本处理定位）。若库中包含关于 LLM 上下文窗口限制或提示词工程最佳实践的其他内容，可能会提供更多角度的理由，但在当前片段中未体现。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 133,
+     "source": "大模型应用/知识条目/PromptTemplate 提示词模板.md",
+     "seq": 3,
+     "score": 0.649102
+    },
+    {
+     "rank": 2,
+     "chunk_id": 104,
+     "source": "大模型应用/LangChain 1.0/核心组件/message/多轮对话.md",
+     "seq": 13,
+     "score": 0.50523
+    },
+    {
+     "rank": 3,
+     "chunk_id": 78,
+     "source": "大模型应用/LangChain 1.0/核心组件/Agent/create_agent 与 Agent 输入输出.md",
+     "seq": 4,
+     "score": 0.489561
+    },
+    {
+     "rank": 4,
+     "chunk_id": 79,
+     "source": "大模型应用/LangChain 1.0/核心组件/Agent/create_agent 与 Agent 输入输出.md",
+     "seq": 5,
+     "score": 0.488253
+    },
+    {
+     "rank": 5,
+     "chunk_id": 130,
+     "source": "大模型应用/知识条目/LangChain 1.0 LCEL 表达式语言.md",
+     "seq": 3,
+     "score": 0.477891
+    }
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    2,
+    3,
+    4,
+    5
+   ],
+   "cited_sources": [
+    "大模型应用/LangChain 1.0/核心组件/Agent/create_agent 与 Agent 输入输出.md",
+    "大模型应用/LangChain 1.0/核心组件/message/多轮对话.md",
+    "大模型应用/知识条目/LangChain 1.0 LCEL 表达式语言.md",
+    "大模型应用/知识条目/PromptTemplate 提示词模板.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 3026.291099988157,
+   "total_ms": 12741.245699988212,
+   "stage_ms": {
+    "vector": 12.134999997215346,
+    "embedding": 701.5486999880522,
+    "judge": 1686.4018000196666,
+    "generate": 10337.391400011256
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 4449,
+   "sentences": 18,
+   "uncited_sentences": 5,
+   "supported": 11,
+   "unsupported": 2,
+   "support_invalid": 0,
+   "support_calls": 13,
+   "unsupported_sentences": [
+    {
+     "sentence": "**开发效率与安全性**：通过输入变量验证，它能在开发早期发现占位符与变量不匹配的问题，提供早期错误反馈，从而提高开发效率 [1]。",
+     "ranks": [
+      1
+     ]
+    },
+    {
+     "sentence": "**简化提示词管理**：它将提示词结构化管理，通过统一的 `format` 方法注入动态内容，比直接拼接字符串更规范 [1]。",
+     "ranks": [
+      1
+     ]
+    }
+   ]
+  },
+  {
+   "question_id": "Q8",
+   "category": "Q",
+   "text": "Pinia 是什么？它管理什么？",
+   "expected_source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "根据提供的知识库片段，回答如下：\n\n**Pinia 是什么：**\nPinia 是 Vue3 官方推荐的状态管理库，它替代了 Vuex [1] [3]。其特点包括轻量级（体积约 ~1KB）、原生支持 TypeScript、天然模块化、支持插件系统以及拥有简洁的 API [3] [5]。\n\n**它管理什么：**\nPinia 用于管理 Vue3 应用的全局状态，以实现组件间的数据共享 [1]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 56,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 29,
+     "score": 0.636442
+    },
+    {
+     "rank": 2,
+     "chunk_id": 28,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 1,
+     "score": 0.596241
+    },
+    {
+     "rank": 3,
+     "chunk_id": 31,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 4,
+     "score": 0.59828
+    },
+    {
+     "rank": 4,
+     "chunk_id": 29,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 2,
+     "score": 0.552889
+    },
+    {
+     "rank": 5,
+     "chunk_id": 32,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 5,
+     "score": 0.508824
+    }
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    3,
+    5
+   ],
+   "cited_sources": [
+    "JavaWeb/Web前端设计/Pinia状态管理.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 3591.6009999928065,
+   "total_ms": 5211.476600001333,
+   "stage_ms": {
+    "vector": 3.2913000031840056,
+    "embedding": 942.6435999921523,
+    "judge": 617.9834000067785,
+    "generate": 3645.419500011485
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 2278,
+   "sentences": 3,
+   "uncited_sentences": 0,
+   "supported": 3,
+   "unsupported": 0,
+   "support_invalid": 0,
+   "support_calls": 3,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "Q9",
+   "category": "Q",
+   "text": "Docker 数据卷是什么？容器删了数据还在吗？",
+   "expected_source": "JavaWeb/知识条目/部署/Docker/Docker 数据卷（Volume）.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "Docker 数据卷是 Docker 中用于持久化和共享容器数据的机制，属于实现容器数据持久化与共享的核心机制 [1]。\n\n容器删除后数据依然存在。数据卷独立于容器的生命周期，容器删除后数据依然保留 [1]。其核心价值之一即为数据持久化，确保在容器删除时数据不会丢失 [2]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 70,
+     "source": "JavaWeb/知识条目/部署/Docker/Docker 数据卷（Volume）.md",
+     "seq": 1,
+     "score": 0.808238
+    },
+    {
+     "rank": 2,
+     "chunk_id": 71,
+     "source": "JavaWeb/知识条目/部署/Docker/Docker 数据卷（Volume）.md",
+     "seq": 2,
+     "score": 0.670576
+    },
+    {
+     "rank": 3,
+     "chunk_id": 72,
+     "source": "JavaWeb/知识条目/部署/Docker/Docker 镜像.md",
+     "seq": 1,
+     "score": 0.575671
+    },
+    {
+     "rank": 4,
+     "chunk_id": 74,
+     "source": "JavaWeb/知识条目/部署/Docker/Docker 镜像.md",
+     "seq": 3,
+     "score": 0.540038
+    },
+    {
+     "rank": 5,
+     "chunk_id": 68,
+     "source": "JavaWeb/知识条目/后端/Tomcat.md",
+     "seq": 2,
+     "score": 0.514677
+    }
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    2
+   ],
+   "cited_sources": [
+    "JavaWeb/知识条目/部署/Docker/Docker 数据卷（Volume）.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 5640.706500009401,
+   "total_ms": 6813.669800001662,
+   "stage_ms": {
+    "vector": 3.632399981142953,
+    "embedding": 1112.565799994627,
+    "judge": 4095.3010999946855,
+    "generate": 1601.4290999737568
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 2233,
+   "sentences": 4,
+   "uncited_sentences": 1,
+   "supported": 3,
+   "unsupported": 0,
+   "support_invalid": 0,
+   "support_calls": 3,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "Q10",
+   "category": "Q",
+   "text": "什么是 Bean？",
+   "expected_source": "JavaWeb/知识条目/后端/Bean.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "Bean 通常指被 Spring 容器管理的对象 [1]。只要对象交给容器创建、装配和管理，它就可以被称为 Bean [1]。\n\nBean 是 Spring 中最常见的术语之一，很多配置和注解都围绕它展开 [1]。Bean 不是普通的 Java 类名，而是容器管理对象的称呼 [2]。创建、注入、销毁都可以由容器接管 [2]。在配置类、注解和 XML 中都可能出现 [2]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 60,
+     "source": "JavaWeb/知识条目/后端/Bean.md",
+     "seq": 1,
+     "score": 0.643155
+    },
+    {
+     "rank": 2,
+     "chunk_id": 61,
+     "source": "JavaWeb/知识条目/后端/Bean.md",
+     "seq": 2,
+     "score": 0.642991
+    },
+    {
+     "rank": 3,
+     "chunk_id": 3,
+     "source": "JavaWeb/JavaWeb后端开发/会话管理与登陆校验/Interceptor拦截器技术.md",
+     "seq": 3,
+     "score": 0.478988
+    },
+    {
+     "rank": 4,
+     "chunk_id": 20,
+     "source": "JavaWeb/JavaWeb后端开发/会话管理与登陆校验/Interceptor拦截器技术.md",
+     "seq": 20,
+     "score": 0.436934
+    },
+    {
+     "rank": 5,
+     "chunk_id": 21,
+     "source": "JavaWeb/JavaWeb后端开发/会话管理与登陆校验/Interceptor拦截器技术.md",
+     "seq": 21,
+     "score": 0.402784
+    }
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    2
+   ],
+   "cited_sources": [
+    "JavaWeb/知识条目/后端/Bean.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 2260.765099985292,
+   "total_ms": 3585.082500008866,
+   "stage_ms": {
+    "vector": 3.765200002817437,
+    "embedding": 1071.78660001955,
+    "judge": 740.5383000150323,
+    "generate": 1767.6200999994762
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 1628,
+   "sentences": 6,
+   "uncited_sentences": 0,
+   "supported": 6,
+   "unsupported": 0,
+   "support_invalid": 0,
+   "support_calls": 6,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "Q11",
+   "category": "Q",
+   "text": "URL 编码是什么？为什么要编码？",
+   "expected_source": "JavaWeb/知识条目/后端/URL编码.md",
+   "decision": "PARTIAL",
+   "status": "PARTIAL",
+   "failure": null,
+   "answer": "**URL 编码是什么**\nURL 编码用于把特殊字符转换成浏览器和服务器都能正确识别的格式 [1]。\n\n**为什么要编码**\n因为在 URL 中不能直接安全传递所有字符 [1]。如果不进行编码，包含中文、空格、&、= 等特殊字符的参数可能会被错误拆分或出现乱码 [1]。\n\n**覆盖边界声明**\n仅基于提供的片段 [1] 中关于 JavaWeb 场景的信息回答。片段 [2] 至 [5] 分别涉及 Cookie/Session、拦截器与过滤器选择、LCEL 语法及应用场景，均未包含关于 URL 编码定义或原因的额外信息，故未作为答案依据。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 69,
+     "source": "JavaWeb/知识条目/后端/URL编码.md",
+     "seq": 1,
+     "score": 0.795597
+    },
+    {
+     "rank": 2,
+     "chunk_id": 62,
+     "source": "JavaWeb/知识条目/后端/Cookie 和 Session.md",
+     "seq": 1,
+     "score": 0.523826
+    },
+    {
+     "rank": 3,
+     "chunk_id": 21,
+     "source": "JavaWeb/JavaWeb后端开发/会话管理与登陆校验/Interceptor拦截器技术.md",
+     "seq": 21,
+     "score": 0.448251
+    },
+    {
+     "rank": 4,
+     "chunk_id": 129,
+     "source": "大模型应用/知识条目/LangChain 1.0 LCEL 表达式语言.md",
+     "seq": 2,
+     "score": 0.518135
+    },
+    {
+     "rank": 5,
+     "chunk_id": 22,
+     "source": "JavaWeb/JavaWeb后端开发/会话管理与登陆校验/Interceptor拦截器技术.md",
+     "seq": 22,
+     "score": 0.435543
+    }
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    2,
+    5
+   ],
+   "cited_sources": [
+    "JavaWeb/JavaWeb后端开发/会话管理与登陆校验/Interceptor拦截器技术.md",
+    "JavaWeb/知识条目/后端/Cookie 和 Session.md",
+    "JavaWeb/知识条目/后端/URL编码.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 9857.93850000482,
+   "total_ms": 12717.52400000696,
+   "stage_ms": {
+    "vector": 27.142000006278977,
+    "embedding": 889.0575999976136,
+    "judge": 8320.538999978453,
+    "generate": 3478.983300010441
+   },
+   "model_calls": 3,
+   "attempts": 2,
+   "generate_prompt_chars": 1854,
+   "sentences": 5,
+   "uncited_sentences": 0,
+   "supported": 3,
+   "unsupported": 2,
+   "support_invalid": 0,
+   "support_calls": 5,
+   "unsupported_sentences": [
+    {
+     "sentence": "仅基于提供的片段 [1] 中关于 JavaWeb 场景的信息回答。",
+     "ranks": [
+      1
+     ]
+    },
+    {
+     "sentence": "片段 [2] 至 [5] 分别涉及 Cookie/Session、拦截器与过滤器选择、LCEL 语法及应用场景，均未包含关于 URL 编码定义或原因的额外信息，故未作为答案依据。",
+     "ranks": [
+      2,
+      5
+     ]
+    }
+   ]
+  },
+  {
+   "question_id": "Q12",
+   "category": "Q",
+   "text": "Redis 内存不足时怎么淘汰数据？有哪些策略？",
+   "expected_source": "数据库/知识条目/Redis 内存淘汰.md",
+   "decision": "PARTIAL",
+   "status": "PARTIAL",
+   "failure": null,
+   "answer": "**回答：**\n\n根据提供的知识库片段，Redis 在内存不足时通过**内存淘汰（Eviction）**机制来释放空间 [2]。\n\n**1. 触发机制**\n当 Redis 使用的内存达到配置的 `maxmemory` 上限时，会根据预设的淘汰策略自动删除部分键以释放内存空间 [2]。这是 Redis 作为内存数据库的关键自我保护机制 [2]。\n\n**2. 淘汰策略**\n在内存满时，系统会按策略淘汰 key（包括过期 key 和普通 key）[3]。\n具体涉及的策略包括：**LRU**、**LFU**、**TTL** 等 [1]。Redis 通过配置 `maxmemory` 和这些淘汰策略来管理内存上限，确保服务持续可用 [1]。\n\n**3. 与其他过期处理策略的关系**\n内存淘汰是 Redis 处理过期数据的三种策略之一，与“惰性删除”和“定期删除”协同工作 [3]。前两者主要处理已过期的 key，而内存淘汰策略则在内存达到上限时生效，不仅清理过期 key，也可能淘汰普通的活跃 key [3]。\n\n---\n**覆盖边界声明：**\n知识库中**只**提及了策略名称（LRU, LFU, TTL）及触发条件 [1, 3]，**未**提供这些策略的具体算法细节（如 LRU 近似算法如何实现、LFU 的计数器等）、其他可选策略（如 `allkeys-lru`, `volatile-lru`, `allkeys-random`, `volatile-ttl` 等详细列表）或具体的配置参数示例。因此，关于“有哪些策略”的详细分类和具体行为，库中信息有限，无法完全展开。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 213,
+     "source": "数据库/知识条目/Redis 内存淘汰.md",
+     "seq": 1,
+     "score": 0.796852
+    },
+    {
+     "rank": 2,
+     "chunk_id": 214,
+     "source": "数据库/知识条目/Redis 内存淘汰.md",
+     "seq": 2,
+     "score": 0.763237
+    },
+    {
+     "rank": 3,
+     "chunk_id": 182,
+     "source": "数据库/Redis过期Key处理.md",
+     "seq": 6,
+     "score": 0.678804
+    },
+    {
+     "rank": 4,
+     "chunk_id": 178,
+     "source": "数据库/Redis过期Key处理.md",
+     "seq": 2,
+     "score": 0.651878
+    },
+    {
+     "rank": 5,
+     "chunk_id": 150,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 3,
+     "score": 0.663875
+    }
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    2,
+    3
+   ],
+   "cited_sources": [
+    "数据库/Redis过期Key处理.md",
+    "数据库/知识条目/Redis 内存淘汰.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 2559.1908000060357,
+   "total_ms": 8805.747500009602,
+   "stage_ms": {
+    "vector": 7.672899984754622,
+    "embedding": 845.4109000158496,
+    "judge": 1145.2699000074062,
+    "generate": 6804.214300005697
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 1640,
+   "sentences": 10,
+   "uncited_sentences": 1,
+   "supported": 7,
+   "unsupported": 2,
+   "support_invalid": 0,
+   "support_calls": 9,
+   "unsupported_sentences": [
+    {
+     "sentence": "前两者主要处理已过期的 key，而内存淘汰策略则在内存达到上限时生效，不仅清理过期 key，也可能淘汰普通的活跃 key [3]。",
+     "ranks": [
+      3
+     ]
+    },
+    {
+     "sentence": "知识库中**只**提及了策略名称（LRU, LFU, TTL）及触发条件 [1, 3]，**未**提供这些策略的具体算法细节（如 LRU 近似算法如何实现、LFU 的计数器等）、其他可选策略（如 `allkeys-lru`, `volatile-lru`, `allkeys-random`, `volatile-ttl` 等详细列表）或具体的配置参数示例。",
+     "ranks": [
+      1,
+      3
+     ]
+    }
+   ]
+  },
+  {
+   "question_id": "Q13",
+   "category": "Q",
+   "text": "拦截器和过滤器有什么区别？分别执行在哪个阶段？",
+   "expected_source": "JavaWeb/JavaWeb后端开发/会话管理与登陆校验/Interceptor拦截器技术.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "拦截器（Interceptor）和过滤器（Filter）的主要区别及执行阶段如下：\n\n**主要区别：**\n1.  **规范归属**：过滤器属于 Jakarta Servlet 规范，而拦截器是 Spring MVC 特有的组件 [1]。\n2.  **对 Spring 的依赖**：过滤器不依赖 Spring，拦截器强依赖 Spring [1]。\n3.  **Bean 访问能力**：过滤器不能访问 Spring Bean，而拦截器可以通过 `@Autowired` 注入访问 Spring Bean [1]。\n4.  **拦截范围**：过滤器拦截所有请求（包括静态资源、JSP），而拦截器仅拦截 Controller 方法 [1]。\n5.  **配置方式**：过滤器通常使用 `@WebFilter` 和 `@ServletComponentScan` 进行配置，拦截器则使用 `@Configuration` 和 `WebMvcConfigurer` [1]。\n\n**执行阶段与顺序：**\n*   **过滤器**：执行在 Servlet 之前，属于容器级别，在拦截器之前执行 [1]。\n*   **拦截器**：执行在 Controller 之前，属于 Spring 级别，在过滤器之后执行 [1]。它主要在控制器方法执行前后对请求进行拦截处理 [2]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 20,
+     "source": "JavaWeb/JavaWeb后端开发/会话管理与登陆校验/Interceptor拦截器技术.md",
+     "seq": 20,
+     "score": 0.684574
+    },
+    {
+     "rank": 2,
+     "chunk_id": 64,
+     "source": "JavaWeb/知识条目/后端/Interceptor拦截器.md",
+     "seq": 1,
+     "score": 0.667939
+    },
+    {
+     "rank": 3,
+     "chunk_id": 2,
+     "source": "JavaWeb/JavaWeb后端开发/会话管理与登陆校验/Interceptor拦截器技术.md",
+     "seq": 2,
+     "score": 0.660973
+    },
+    {
+     "rank": 4,
+     "chunk_id": 1,
+     "source": "JavaWeb/JavaWeb后端开发/会话管理与登陆校验/Interceptor拦截器技术.md",
+     "seq": 1,
+     "score": 0.627936
+    },
+    {
+     "rank": 5,
+     "chunk_id": 65,
+     "source": "JavaWeb/知识条目/后端/Interceptor拦截器.md",
+     "seq": 2,
+     "score": 0.635662
+    }
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    2
+   ],
+   "cited_sources": [
+    "JavaWeb/JavaWeb后端开发/会话管理与登陆校验/Interceptor拦截器技术.md",
+    "JavaWeb/知识条目/后端/Interceptor拦截器.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 2122.466100001475,
+   "total_ms": 7233.45739999786,
+   "stage_ms": {
+    "vector": 13.929399981861934,
+    "embedding": 1008.0554999876767,
+    "judge": 621.6631999996025,
+    "generate": 5588.376900006551
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 1886,
+   "sentences": 8,
+   "uncited_sentences": 0,
+   "supported": 8,
+   "unsupported": 0,
+   "support_invalid": 0,
+   "support_calls": 8,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "Q14",
+   "category": "Q",
+   "text": "Nginx 反向代理是什么？和正向代理的区别？",
+   "expected_source": "JavaWeb/Web前端设计/Nginx 反向代理服务器.md",
+   "decision": "PARTIAL",
+   "status": "PARTIAL",
+   "failure": null,
+   "answer": "基于提供的知识库片段，关于 Nginx 反向代理及其与正向代理的区别，回答如下：\n\n### 1. Nginx 反向代理是什么？\n\nNginx 是一个轻量级、高性能的 Web 服务器和反向代理服务器 [3]。在反向代理模式下，其核心机制和工作特点如下：\n\n*   **请求转发机制**：代理服务器接收客户端的请求，将其转发给内部的后端服务器（如 Spring Boot、Node.js 等），然后再将后端的响应返回给客户端 [2]。\n*   **透明性**：在这种模式下，用户无法感知到内部网络结构的存在 [2]。\n*   **主要功能与作用**：\n    *   **解决跨域**：通过在 Nginx 配置中统一转发特定前缀（如 `/api`）的请求到后端服务，使前后端保持同源，从而规避浏览器的跨域限制 [2]。\n    *   **负载均衡**：支持轮询、加权轮询、IP Hash 等策略，将请求分发给多个后端实例，以实现高可用和流量分摊 [2]。\n    *   **动静分离**：将动态 API 请求转发给后端应用，而将静态资源（HTML/CSS/JS）直接由 Nginx 返回，以此降低后端压力并提升加载速度 [2]。\n*   **底层模型**：Nginx 通过异步非阻塞的事件驱动模型来处理高并发请求 [3]。\n\n### 2. 和正向代理的区别？\n\n**库中未覆盖“正向代理”的相关定义及与反向代理对比的具体描述，因此无法基于现有片段回答二者区别。**\n\n### 覆盖边界声明\n以上回答仅基于提供的片段 [1]、[2]、[3]。片段主要集中描述了 Nginx 作为反向代理服务器在前后端分离项目中的应用、配置示例及负载均衡机制。关于“正向代理”的定义、工作原理及其与反向代理在客户端/服务端感知、目标方向上的具体区别，在提供的知识库片段中**没有相关记录**。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 25,
+     "source": "JavaWeb/Web前端设计/Nginx 反向代理服务器.md",
+     "seq": 1,
+     "score": 0.72561
+    },
+    {
+     "rank": 2,
+     "chunk_id": 27,
+     "source": "JavaWeb/Web前端设计/Nginx 反向代理服务器.md",
+     "seq": 3,
+     "score": 0.714998
+    },
+    {
+     "rank": 3,
+     "chunk_id": 26,
+     "source": "JavaWeb/Web前端设计/Nginx 反向代理服务器.md",
+     "seq": 2,
+     "score": 0.673097
+    },
+    {
+     "rank": 4,
+     "chunk_id": 222,
+     "source": "数据库/知识条目/缓存.md",
+     "seq": 3,
+     "score": 0.489769
+    },
+    {
+     "rank": 5,
+     "chunk_id": 65,
+     "source": "JavaWeb/知识条目/后端/Interceptor拦截器.md",
+     "seq": 2,
+     "score": 0.457724
+    }
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    2,
+    3
+   ],
+   "cited_sources": [
+    "JavaWeb/Web前端设计/Nginx 反向代理服务器.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 2070.0544000137597,
+   "total_ms": 11595.268600009149,
+   "stage_ms": {
+    "vector": 6.942700012587011,
+    "embedding": 841.9024999893736,
+    "judge": 697.3201000073459,
+    "generate": 10046.207699982915
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 2141,
+   "sentences": 14,
+   "uncited_sentences": 6,
+   "supported": 7,
+   "unsupported": 1,
+   "support_invalid": 0,
+   "support_calls": 8,
+   "unsupported_sentences": [
+    {
+     "sentence": "以上回答仅基于提供的片段 [1]、[2]、[3]。",
+     "ranks": [
+      1,
+      2,
+      3
+     ]
+    }
+   ]
+  },
+  {
+   "question_id": "Q15",
+   "category": "Q",
+   "text": "create_agent 是干什么的？它取代了旧版的哪个函数？",
+   "expected_source": "大模型应用/LangChain 1.0/核心组件/Agent/create_agent 与 Agent 输入输出.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "根据提供的知识库片段，回答如下：\n\n**`create_agent` 是干什么的？**\n`create_agent()` 是 LangChain 1.0 中构建 Agent 的唯一入口 [1][2]。它统一了 Agent 的构建方式，取代了旧版的写法 [3]。在使用时，它需要接收 `model`（LLM）、`tools`（工具列表）和 `system_prompt`（系统提示词）三个必选参数 [2]。其导入路径为 `langchain.agents` [3]。\n\n**它取代了旧版的哪个函数？**\n它取代了旧版的 `create_react_agent` 函数 [1][2][3]。旧版的 `create_react_agent` 位于 `langgraph.prebuilt` 模块中，已弃用 [3]。\n\n**主要变更对比：**\n除了函数名和入口变化，旧版到新版还有其他参数和返回值的变更 [3]：\n*   参数名 `prompt` 变更为 `system_prompt` [3]。\n*   中间件参数由 `pre_model_hook` / `post_model_hook` 变更为 `middleware` [3]。\n*   返回值由旧版的 `AgentState`（带 history 字段）变更为新版标准的 `MessagesDict` [3]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 75,
+     "source": "大模型应用/LangChain 1.0/核心组件/Agent/create_agent 与 Agent 输入输出.md",
+     "seq": 1,
+     "score": 0.699378
+    },
+    {
+     "rank": 2,
+     "chunk_id": 91,
+     "source": "大模型应用/LangChain 1.0/核心组件/Agent/create_agent 与 Agent 输入输出.md",
+     "seq": 17,
+     "score": 0.718172
+    },
+    {
+     "rank": 3,
+     "chunk_id": 77,
+     "source": "大模型应用/LangChain 1.0/核心组件/Agent/create_agent 与 Agent 输入输出.md",
+     "seq": 3,
+     "score": 0.681377
+    },
+    {
+     "rank": 4,
+     "chunk_id": 76,
+     "source": "大模型应用/LangChain 1.0/核心组件/Agent/create_agent 与 Agent 输入输出.md",
+     "seq": 2,
+     "score": 0.652931
+    },
+    {
+     "rank": 5,
+     "chunk_id": 88,
+     "source": "大模型应用/LangChain 1.0/核心组件/Agent/create_agent 与 Agent 输入输出.md",
+     "seq": 14,
+     "score": 0.598279
+    }
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    2,
+    3
+   ],
+   "cited_sources": [
+    "大模型应用/LangChain 1.0/核心组件/Agent/create_agent 与 Agent 输入输出.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 5484.518299985211,
+   "total_ms": 18721.68960000272,
+   "stage_ms": {
+    "vector": 18.279400013852865,
+    "embedding": 895.6744000024628,
+    "judge": 708.4307000041008,
+    "generate": 17094.914799992694
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 3162,
+   "sentences": 11,
+   "uncited_sentences": 2,
+   "supported": 8,
+   "unsupported": 1,
+   "support_invalid": 0,
+   "support_calls": 9,
+   "unsupported_sentences": [
+    {
+     "sentence": "在使用时，它需要接收 `model`（LLM）、`tools`（工具列表）和 `system_prompt`（系统提示词）三个必选参数 [2]。",
+     "ranks": [
+      2
+     ]
+    }
+   ]
+  },
+  {
+   "question_id": "Q16",
+   "category": "Q",
+   "text": "大模型“开卷考试”是什么意思？",
+   "expected_source": "大模型应用/知识条目/Rag.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "大模型“开卷考试”是对 **RAG（检索增强生成）** 技术的一种通俗理解 [1]。\n\n具体含义如下：\n1.  它指的是模型在生成回答之前，先从外部知识库中检索出相关的上下文片段，从而“临时”扩充模型的知识储备 [1]。\n2.  在这种模式下，模型不需要死记硬背所有知识，而是像拿着参考书（知识库）去查找答案一样进行工作 [1]。\n3.  RAG 是一种将信息检索与大语言模型相结合的技术范式 [1]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 134,
+     "source": "大模型应用/知识条目/Rag.md",
+     "seq": 1,
+     "score": 0.537299
+    },
+    {
+     "rank": 2,
+     "chunk_id": 92,
+     "source": "大模型应用/LangChain 1.0/核心组件/message/多轮对话.md",
+     "seq": 1,
+     "score": 0.450537
+    },
+    {
+     "rank": 3,
+     "chunk_id": 135,
+     "source": "大模型应用/知识条目/Rag.md",
+     "seq": 2,
+     "score": 0.467315
+    },
+    {
+     "rank": 4,
+     "chunk_id": 75,
+     "source": "大模型应用/LangChain 1.0/核心组件/Agent/create_agent 与 Agent 输入输出.md",
+     "seq": 1,
+     "score": 0.403712
+    },
+    {
+     "rank": 5,
+     "chunk_id": 98,
+     "source": "大模型应用/LangChain 1.0/核心组件/message/多轮对话.md",
+     "seq": 7,
+     "score": 0.430878
+    }
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1
+   ],
+   "cited_sources": [
+    "大模型应用/知识条目/Rag.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 2279.031300015049,
+   "total_ms": 5172.088799998164,
+   "stage_ms": {
+    "vector": 11.130199971375987,
+    "embedding": 920.285900007002,
+    "judge": 629.9655000038911,
+    "generate": 3609.478800004581
+   },
+   "model_calls": 3,
+   "attempts": 2,
+   "generate_prompt_chars": 1554,
+   "sentences": 4,
+   "uncited_sentences": 0,
+   "supported": 4,
+   "unsupported": 0,
+   "support_invalid": 0,
+   "support_calls": 4,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "N1",
+   "category": "N",
+   "text": "Redis 的 GEO 命令怎么用？",
+   "expected_source": null,
+   "decision": "NONE",
+   "status": "REFUSED",
+   "failure": null,
+   "answer": "知识库中没有找到能回答这个问题的内容。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 210,
+     "source": "数据库/知识条目/Redis 事务.md",
+     "seq": 1,
+     "score": 0.611671
+    },
+    {
+     "rank": 2,
+     "chunk_id": 211,
+     "source": "数据库/知识条目/Redis 事务.md",
+     "seq": 2,
+     "score": 0.563771
+    },
+    {
+     "rank": 3,
+     "chunk_id": 212,
+     "source": "数据库/知识条目/Redis 事务.md",
+     "seq": 3,
+     "score": 0.569055
+    },
+    {
+     "rank": 4,
+     "chunk_id": 178,
+     "source": "数据库/Redis过期Key处理.md",
+     "seq": 2,
+     "score": 0.524645
+    },
+    {
+     "rank": 5,
+     "chunk_id": 179,
+     "source": "数据库/Redis过期Key处理.md",
+     "seq": 3,
+     "score": 0.524554
+    }
+   ],
+   "expected_rank": null,
+   "cited_ranks": [],
+   "cited_sources": [],
+   "wrong_source": null,
+   "first_text_ms": null,
+   "total_ms": 1959.862499992596,
+   "stage_ms": {
+    "vector": 5.93230000231415,
+    "embedding": 967.8245000250172,
+    "judge": 985.9843000012916
+   },
+   "model_calls": 1,
+   "attempts": 1,
+   "generate_prompt_chars": null,
+   "sentences": 0,
+   "uncited_sentences": 0,
+   "supported": null,
+   "unsupported": null,
+   "support_invalid": null,
+   "support_calls": 0,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "N2",
+   "category": "N",
+   "text": "Spring Boot 的 GraalVM 原生镜像怎么配置？",
+   "expected_source": null,
+   "decision": "NONE",
+   "status": "REFUSED",
+   "failure": null,
+   "answer": "知识库中没有找到能回答这个问题的内容。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 74,
+     "source": "JavaWeb/知识条目/部署/Docker/Docker 镜像.md",
+     "seq": 3,
+     "score": 0.488008
+    },
+    {
+     "rank": 2,
+     "chunk_id": 72,
+     "source": "JavaWeb/知识条目/部署/Docker/Docker 镜像.md",
+     "seq": 1,
+     "score": 0.4871
+    },
+    {
+     "rank": 3,
+     "chunk_id": 73,
+     "source": "JavaWeb/知识条目/部署/Docker/Docker 镜像.md",
+     "seq": 2,
+     "score": 0.473504
+    },
+    {
+     "rank": 4,
+     "chunk_id": 60,
+     "source": "JavaWeb/知识条目/后端/Bean.md",
+     "seq": 1,
+     "score": 0.430934
+    },
+    {
+     "rank": 5,
+     "chunk_id": 31,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 4,
+     "score": 0.430271
+    }
+   ],
+   "expected_rank": null,
+   "cited_ranks": [],
+   "cited_sources": [],
+   "wrong_source": null,
+   "first_text_ms": null,
+   "total_ms": 1460.536400001729,
+   "stage_ms": {
+    "vector": 7.92220002040267,
+    "embedding": 673.5119999793824,
+    "judge": 778.9363999909256
+   },
+   "model_calls": 1,
+   "attempts": 1,
+   "generate_prompt_chars": null,
+   "sentences": 0,
+   "uncited_sentences": 0,
+   "supported": null,
+   "unsupported": null,
+   "support_invalid": null,
+   "support_calls": 0,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "N3",
+   "category": "N",
+   "text": "Kubernetes 的 StatefulSet 和 Deployment 有什么区别？",
+   "expected_source": null,
+   "decision": "NONE",
+   "status": "REFUSED",
+   "failure": null,
+   "answer": "知识库中没有找到能回答这个问题的内容。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 59,
+     "source": "JavaWeb/知识条目/前端/onMounted生命周期函数.md",
+     "seq": 3,
+     "score": 0.498015
+    },
+    {
+     "rank": 2,
+     "chunk_id": 68,
+     "source": "JavaWeb/知识条目/后端/Tomcat.md",
+     "seq": 2,
+     "score": 0.519417
+    },
+    {
+     "rank": 3,
+     "chunk_id": 20,
+     "source": "JavaWeb/JavaWeb后端开发/会话管理与登陆校验/Interceptor拦截器技术.md",
+     "seq": 20,
+     "score": 0.428342
+    },
+    {
+     "rank": 4,
+     "chunk_id": 208,
+     "source": "数据库/知识条目/epoll（Linux 高并发网络模型）.md",
+     "seq": 3,
+     "score": 0.514591
+    },
+    {
+     "rank": 5,
+     "chunk_id": 1,
+     "source": "JavaWeb/JavaWeb后端开发/会话管理与登陆校验/Interceptor拦截器技术.md",
+     "seq": 1,
+     "score": 0.327522
+    }
+   ],
+   "expected_rank": null,
+   "cited_ranks": [],
+   "cited_sources": [],
+   "wrong_source": null,
+   "first_text_ms": null,
+   "total_ms": 2002.683300001081,
+   "stage_ms": {
+    "vector": 16.235699993558228,
+    "embedding": 922.7225999929942,
+    "judge": 1063.5877999884542
+   },
+   "model_calls": 1,
+   "attempts": 1,
+   "generate_prompt_chars": null,
+   "sentences": 0,
+   "uncited_sentences": 0,
+   "supported": null,
+   "unsupported": null,
+   "support_invalid": null,
+   "support_calls": 0,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "N4",
+   "category": "N",
+   "text": "Vue 3 的 Teleport 特性怎么用？",
+   "expected_source": null,
+   "decision": "NONE",
+   "status": "REFUSED",
+   "failure": null,
+   "answer": "知识库中没有找到能回答这个问题的内容。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 59,
+     "source": "JavaWeb/知识条目/前端/onMounted生命周期函数.md",
+     "seq": 3,
+     "score": 0.50809
+    },
+    {
+     "rank": 2,
+     "chunk_id": 58,
+     "source": "JavaWeb/知识条目/前端/onMounted生命周期函数.md",
+     "seq": 2,
+     "score": 0.483171
+    },
+    {
+     "rank": 3,
+     "chunk_id": 57,
+     "source": "JavaWeb/知识条目/前端/onMounted生命周期函数.md",
+     "seq": 1,
+     "score": 0.493122
+    },
+    {
+     "rank": 4,
+     "chunk_id": 37,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 10,
+     "score": 0.463442
+    },
+    {
+     "rank": 5,
+     "chunk_id": 56,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 29,
+     "score": 0.49748
+    }
+   ],
+   "expected_rank": null,
+   "cited_ranks": [],
+   "cited_sources": [],
+   "wrong_source": null,
+   "first_text_ms": null,
+   "total_ms": 1578.80750001641,
+   "stage_ms": {
+    "vector": 6.0184000176377594,
+    "embedding": 793.8476999988779,
+    "judge": 778.7600999872666
+   },
+   "model_calls": 1,
+   "attempts": 1,
+   "generate_prompt_chars": null,
+   "sentences": 0,
+   "uncited_sentences": 0,
+   "supported": null,
+   "unsupported": null,
+   "support_invalid": null,
+   "support_calls": 0,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "N5",
+   "category": "N",
+   "text": "MySQL 的窗口函数 ROW_NUMBER() 怎么用？",
+   "expected_source": null,
+   "decision": "NONE",
+   "status": "REFUSED",
+   "failure": null,
+   "answer": "知识库中没有找到能回答这个问题的内容。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 103,
+     "source": "大模型应用/LangChain 1.0/核心组件/message/多轮对话.md",
+     "seq": 12,
+     "score": 0.510216
+    },
+    {
+     "rank": 2,
+     "chunk_id": 112,
+     "source": "大模型应用/LangChain 1.0/核心组件/message/多轮对话.md",
+     "seq": 21,
+     "score": 0.506074
+    },
+    {
+     "rank": 3,
+     "chunk_id": 212,
+     "source": "数据库/知识条目/Redis 事务.md",
+     "seq": 3,
+     "score": 0.530133
+    },
+    {
+     "rank": 4,
+     "chunk_id": 108,
+     "source": "大模型应用/LangChain 1.0/核心组件/message/多轮对话.md",
+     "seq": 17,
+     "score": 0.506528
+    },
+    {
+     "rank": 5,
+     "chunk_id": 147,
+     "source": "大模型应用/知识条目/Tools.md",
+     "seq": 3,
+     "score": 0.483113
+    }
+   ],
+   "expected_rank": null,
+   "cited_ranks": [],
+   "cited_sources": [],
+   "wrong_source": null,
+   "first_text_ms": null,
+   "total_ms": 5104.465899989009,
+   "stage_ms": {
+    "vector": 11.200500011909753,
+    "embedding": 925.4493999760598,
+    "judge": 4167.548400000669
+   },
+   "model_calls": 1,
+   "attempts": 1,
+   "generate_prompt_chars": null,
+   "sentences": 0,
+   "uncited_sentences": 0,
+   "supported": null,
+   "unsupported": null,
+   "support_invalid": null,
+   "support_calls": 0,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "N6",
+   "category": "N",
+   "text": "LangChain 的 Graph 模块如何构建状态图？",
+   "expected_source": null,
+   "decision": "NONE",
+   "status": "REFUSED",
+   "failure": null,
+   "answer": "知识库中没有找到能回答这个问题的内容。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 129,
+     "source": "大模型应用/知识条目/LangChain 1.0 LCEL 表达式语言.md",
+     "seq": 2,
+     "score": 0.561871
+    },
+    {
+     "rank": 2,
+     "chunk_id": 130,
+     "source": "大模型应用/知识条目/LangChain 1.0 LCEL 表达式语言.md",
+     "seq": 3,
+     "score": 0.565766
+    },
+    {
+     "rank": 3,
+     "chunk_id": 91,
+     "source": "大模型应用/LangChain 1.0/核心组件/Agent/create_agent 与 Agent 输入输出.md",
+     "seq": 17,
+     "score": 0.554119
+    },
+    {
+     "rank": 4,
+     "chunk_id": 75,
+     "source": "大模型应用/LangChain 1.0/核心组件/Agent/create_agent 与 Agent 输入输出.md",
+     "seq": 1,
+     "score": 0.503451
+    },
+    {
+     "rank": 5,
+     "chunk_id": 111,
+     "source": "大模型应用/LangChain 1.0/核心组件/message/多轮对话.md",
+     "seq": 20,
+     "score": 0.518297
+    }
+   ],
+   "expected_rank": null,
+   "cited_ranks": [],
+   "cited_sources": [],
+   "wrong_source": null,
+   "first_text_ms": null,
+   "total_ms": 3195.57359997998,
+   "stage_ms": {
+    "vector": 8.63790002767928,
+    "embedding": 1011.9284999964293,
+    "judge": 2174.8122999852058
+   },
+   "model_calls": 1,
+   "attempts": 1,
+   "generate_prompt_chars": null,
+   "sentences": 0,
+   "uncited_sentences": 0,
+   "supported": null,
+   "unsupported": null,
+   "support_invalid": null,
+   "support_calls": 0,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "N7",
+   "category": "N",
+   "text": "我去年三月在上海买了什么？",
+   "expected_source": null,
+   "decision": "NONE",
+   "status": "REFUSED",
+   "failure": null,
+   "answer": "知识库中没有找到能回答这个问题的内容。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 81,
+     "source": "大模型应用/LangChain 1.0/核心组件/Agent/create_agent 与 Agent 输入输出.md",
+     "seq": 7,
+     "score": 0.443176
+    },
+    {
+     "rank": 2,
+     "chunk_id": 89,
+     "source": "大模型应用/LangChain 1.0/核心组件/Agent/create_agent 与 Agent 输入输出.md",
+     "seq": 15,
+     "score": 0.429183
+    },
+    {
+     "rank": 3,
+     "chunk_id": 38,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 11,
+     "score": 0.439501
+    },
+    {
+     "rank": 4,
+     "chunk_id": 45,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 18,
+     "score": 0.41514
+    },
+    {
+     "rank": 5,
+     "chunk_id": 78,
+     "source": "大模型应用/LangChain 1.0/核心组件/Agent/create_agent 与 Agent 输入输出.md",
+     "seq": 4,
+     "score": 0.408254
+    }
+   ],
+   "expected_rank": null,
+   "cited_ranks": [],
+   "cited_sources": [],
+   "wrong_source": null,
+   "first_text_ms": null,
+   "total_ms": 1452.9890999838244,
+   "stage_ms": {
+    "vector": 4.782500007422641,
+    "embedding": 756.0601999866776,
+    "judge": 687.0924000104424
+   },
+   "model_calls": 1,
+   "attempts": 1,
+   "generate_prompt_chars": null,
+   "sentences": 0,
+   "uncited_sentences": 0,
+   "supported": null,
+   "unsupported": null,
+   "support_invalid": null,
+   "support_calls": 0,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "P1",
+   "category": "P",
+   "text": "什么是 Transformer 的多头注意力机制？",
+   "expected_source": null,
+   "decision": "PARTIAL",
+   "status": "PARTIAL",
+   "failure": null,
+   "answer": "基于提供的知识库片段，关于 Transformer 的多头注意力机制（MHA），可以总结如下：\n\n在传统的 MHA（Multi-Head Attention）架构中，每个注意力头都拥有独立的 K（Key）和 V（Value）矩阵 [1]。这种设计会导致 KV Cache 的占用量极大 [1]。与之相对的 MQA 和 GQA 是通过让多个头共享 K、V 来减少显存占用的优化方案，而 MHA 作为基准方案，其核心特征是各头参数独立 [1]。\n\n此外，MHA 的计算过程涉及 Q、K、V 矩阵的交互。传统的注意力计算通常表示为 `Softmax(Q_all · K_all^T) · V_all`，即所有 Token 参与计算 [2]。为了优化计算效率，现代框架如 FlashAttention 通过利用 GPU 内存层级（HBM 到 SRAM）进行分块计算，来加速 Attention 的计算过程，避免频繁读写带来的带宽瓶颈 [5]。\n\n**覆盖边界声明：**\n现有知识库片段仅提供了 MHA 中关于“每个头拥有独立 K、V”的特征描述 [1]，以及与之对比的 MQA/GQA 优化思路 [1]，和基于 Attention 计算的一般公式 [2] 与加速技术 [5]。**片段中未包含多头注意力机制的具体定义、多头并行处理的原理、或如何合并多头结果等更基础的数学定义和机制解释**，因此无法基于现有片段回答“什么是多头注意力机制”的完整定义，仅能回答其与传统单一头或变体（MQA/GQA）在 K/V 共享上的区别。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 122,
+     "source": "大模型应用/知识条目/KV Cache.md",
+     "seq": 7,
+     "score": 0.544614
+    },
+    {
+     "rank": 2,
+     "chunk_id": 119,
+     "source": "大模型应用/知识条目/KV Cache.md",
+     "seq": 4,
+     "score": 0.520229
+    },
+    {
+     "rank": 3,
+     "chunk_id": 123,
+     "source": "大模型应用/知识条目/KV Cache.md",
+     "seq": 8,
+     "score": 0.459542
+    },
+    {
+     "rank": 4,
+     "chunk_id": 92,
+     "source": "大模型应用/LangChain 1.0/核心组件/message/多轮对话.md",
+     "seq": 1,
+     "score": 0.481036
+    },
+    {
+     "rank": 5,
+     "chunk_id": 125,
+     "source": "大模型应用/知识条目/KV Cache.md",
+     "seq": 10,
+     "score": 0.474104
+    }
+   ],
+   "expected_rank": null,
+   "cited_ranks": [
+    1,
+    2,
+    5
+   ],
+   "cited_sources": [
+    "大模型应用/知识条目/KV Cache.md"
+   ],
+   "wrong_source": null,
+   "first_text_ms": 2503.114499995718,
+   "total_ms": 6662.502699997276,
+   "stage_ms": {
+    "vector": 10.684799985028803,
+    "embedding": 937.5570999982301,
+    "judge": 1109.9023999995552,
+    "generate": 4600.981499999762
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 1133,
+   "sentences": 8,
+   "uncited_sentences": 2,
+   "supported": 4,
+   "unsupported": 2,
+   "support_invalid": 0,
+   "support_calls": 6,
+   "unsupported_sentences": [
+    {
+     "sentence": "这种设计会导致 KV Cache 的占用量极大 [1]。",
+     "ranks": [
+      1
+     ]
+    },
+    {
+     "sentence": "与之相对的 MQA 和 GQA 是通过让多个头共享 K、V 来减少显存占用的优化方案，而 MHA 作为基准方案，其核心特征是各头参数独立 [1]。",
+     "ranks": [
+      1
+     ]
+    }
+   ]
+  },
+  {
+   "question_id": "R1",
+   "category": "R",
+   "text": "大模型推理时为什么速度慢？有什么优化手段？",
+   "expected_source": "大模型应用/知识条目/KV Cache.md",
+   "decision": "PARTIAL",
+   "status": "PARTIAL",
+   "failure": null,
+   "answer": "基于提供的知识库片段，关于大模型推理速度慢的原因及优化手段回答如下：\n\n**1. 速度慢的原因：显存瓶颈**\nKV Cache 是典型的“以显存换时间”策略，其内存占用非常惊人，是推理部署的最大瓶颈 [2]。例如 LLaMA-7B 模型在特定配置下 KV Cache 占用可达 34GB，远超模型权重本身的 14GB [2]。\n\n**2. 优化手段：连续批处理（Continuous Batching）**\n传统推理需等待整个序列生成完毕才能处理下一批请求 [1]。通过利用 KV Cache 的独立性，采用连续批处理技术，可以在 Token 粒度动态调度请求：生成完毕的请求立即退出，新请求立即插入空位，从而极大提高 GPU 利用率 [1]。\n\n**3. 关于其他优化手段**\n提供的片段中未包含除“连续批处理”和“KV Cache”机制描述外的其他具体优化手段（如量化、剪枝等），因此无法基于现有内容回答其他优化方式。\n\n**覆盖边界声明**：\n以上回答仅基于片段 [1] 和 [2] 中关于推理机制和内存瓶颈的内容。片段 [3] 涉及 RAG（检索增强生成）的知识定义，片段 [4] 涉及推理阶段的划分（Prefill 和 Decode 的计算逻辑），片段 [5] 涉及 Redis 的持久化机制（RDB/AOF）。其中，片段 [4] 虽解释了推理过程，但未直接提供解决“速度慢”的优化方案；片段 [3] 和 [5] 与“大模型推理速度慢及优化”无直接关联。因此，对于推理速度慢的其他潜在原因（如算力不足、网络延迟等）及更多优化手段（如模型量化、Speculative Decoding 等），因知识库片段未覆盖，无法作答。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 124,
+     "source": "大模型应用/知识条目/KV Cache.md",
+     "seq": 9,
+     "score": 0.555786
+    },
+    {
+     "rank": 2,
+     "chunk_id": 120,
+     "source": "大模型应用/知识条目/KV Cache.md",
+     "seq": 5,
+     "score": 0.584081
+    },
+    {
+     "rank": 3,
+     "chunk_id": 134,
+     "source": "大模型应用/知识条目/Rag.md",
+     "seq": 1,
+     "score": 0.543021
+    },
+    {
+     "rank": 4,
+     "chunk_id": 118,
+     "source": "大模型应用/知识条目/KV Cache.md",
+     "seq": 3,
+     "score": 0.519427
+    },
+    {
+     "rank": 5,
+     "chunk_id": 156,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 9,
+     "score": 0.521227
+    }
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    2,
+    3,
+    4,
+    5
+   ],
+   "cited_sources": [
+    "大模型应用/知识条目/KV Cache.md",
+    "大模型应用/知识条目/Rag.md",
+    "数据库/Redis/Redis持久化.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 70181.14890001016,
+   "total_ms": 79704.44850000786,
+   "stage_ms": {
+    "vector": 7.701700000325218,
+    "embedding": 913.9340000110678,
+    "judge": 3713.626300013857,
+    "generate": 75065.29830000363
+   },
+   "model_calls": 3,
+   "attempts": 2,
+   "generate_prompt_chars": 1481,
+   "sentences": 9,
+   "uncited_sentences": 2,
+   "supported": 7,
+   "unsupported": 0,
+   "support_invalid": 0,
+   "support_calls": 7,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "R2",
+   "category": "R",
+   "text": "服务器断电了，Redis 数据会不会丢？",
+   "expected_source": "数据库/Redis/Redis持久化.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "根据提供的知识库片段，回答如下：\n\n**会丢失数据。**\n\nRedis 的数据常驻内存，而内存不是持久存储，因此断电会导致数据全部丢失 [1][2]。若要在断电情况下保障数据安全，必须借助持久化机制（如 RDB 或 AOF）将数据写到磁盘 [2]。\n\n补充信息：\n*   **RDB** 快照式持久化的数据丢失窗口较大，为分钟级 [4]。\n*   **AOF** 命令日志式持久化（`everysec` 策略）在断电时最多可能丢失 1 秒的数据 [4]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 148,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 1,
+     "score": 0.683895
+    },
+    {
+     "rank": 2,
+     "chunk_id": 150,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 3,
+     "score": 0.629197
+    },
+    {
+     "rank": 3,
+     "chunk_id": 194,
+     "source": "数据库/Redis过期Key处理.md",
+     "seq": 18,
+     "score": 0.615754
+    },
+    {
+     "rank": 4,
+     "chunk_id": 176,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 29,
+     "score": 0.595304
+    },
+    {
+     "rank": 5,
+     "chunk_id": 211,
+     "source": "数据库/知识条目/Redis 事务.md",
+     "seq": 2,
+     "score": 0.583903
+    }
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    2,
+    4
+   ],
+   "cited_sources": [
+    "数据库/Redis/Redis持久化.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 15963.991900003748,
+   "total_ms": 17611.525899992557,
+   "stage_ms": {
+    "vector": 5.120499990880489,
+    "embedding": 977.327200002037,
+    "judge": 805.6907000136562,
+    "generate": 15822.039899998344
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 1550,
+   "sentences": 5,
+   "uncited_sentences": 1,
+   "supported": 4,
+   "unsupported": 0,
+   "support_invalid": 0,
+   "support_calls": 4,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "R3",
+   "category": "R",
+   "text": "页面刷新后 Pinia 里的状态还在吗？",
+   "expected_source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "**默认情况下，页面刷新后 Pinia 里的状态会丢失。**\n\n根据知识库片段 [2]，默认情况下，Pinia Store 的状态只在内存中，页面刷新后丢失 [2]。\n\n如果需要让状态在页面刷新后依然存在，需要进行**状态持久化** [2]。片段 [4] 指出，持久化可以通过“手动 localStorage”或“pinia-plugin-persistedstate 插件”来实现 [4]。\n\n推荐使用 `pinia-plugin-persistedstate` 插件，该插件的优势包括：\n1. 自动同步 localStorage 和 state [1]。\n2. 页面刷新后自动恢复状态 [1]。\n3. 无需手动编写 localStorage 代码 [1]。\n\n具体使用时，需要在 `defineStore` 中配置 `persist` 选项，指定存储的 key、需要持久化的 state 路径以及存储方式（如 localStorage） [1]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 45,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 18,
+     "score": 0.645438
+    },
+    {
+     "rank": 2,
+     "chunk_id": 43,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 16,
+     "score": 0.608936
+    },
+    {
+     "rank": 3,
+     "chunk_id": 28,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 1,
+     "score": 0.608667
+    },
+    {
+     "rank": 4,
+     "chunk_id": 56,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 29,
+     "score": 0.612851
+    },
+    {
+     "rank": 5,
+     "chunk_id": 29,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 2,
+     "score": 0.559497
+    }
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    2,
+    4
+   ],
+   "cited_sources": [
+    "JavaWeb/Web前端设计/Pinia状态管理.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 4066.870000009658,
+   "total_ms": 7432.154300011462,
+   "stage_ms": {
+    "vector": 4.966800013789907,
+    "embedding": 1011.9989999802783,
+    "judge": 1017.6582999993116,
+    "generate": 5395.219300000463
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 3007,
+   "sentences": 8,
+   "uncited_sentences": 1,
+   "supported": 6,
+   "unsupported": 1,
+   "support_invalid": 0,
+   "support_calls": 7,
+   "unsupported_sentences": [
+    {
+     "sentence": "如果需要让状态在页面刷新后依然存在，需要进行**状态持久化** [2]。",
+     "ranks": [
+      2
+     ]
+    }
+   ]
+  },
+  {
+   "question_id": "R4",
+   "category": "R",
+   "text": "怎么防止数据库被 SQL 注入攻击？",
+   "expected_source": "JavaWeb/知识条目/后端/SQL注入.md",
+   "decision": "PARTIAL",
+   "status": "PARTIAL",
+   "failure": null,
+   "answer": "基于提供的知识库片段，防止数据库被 SQL 注入攻击的方法主要如下：\n\n1. **避免直接拼接用户输入**：不要直接将用户输入拼接进 SQL 字符串中，因为这在 JavaWeb 开发中风险很高，可能导致数据被非法查询、修改甚至删除 [1]。\n2. **使用预编译语句和参数绑定**：在处理用户输入时，应优先使用预编译语句（Prepared Statements）和参数绑定技术，以替代字符串拼接 [1]。\n3. **注意输入校验**：在使用 MyBatis 和 JDBC 进行数据库操作时，都要特别注意对用户输入进行校验 [1]。\n\n**覆盖边界声明**：\n知识库中关于 SQL 注入的内容仅包含片段 [1] 中提到的上述三点建议。片段 [2] 涉及事务 ACID 特性，片段 [3] 涉及缓存策略与问题，片段 [4] 涉及事务定义，这些片段均未提供关于防止 SQL 注入的其他技术细节（如具体的代码示例、WAF 使用、或数据库权限最小化原则等）。因此，基于现有资料，无法回答除上述三点之外的防范措施。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 66,
+     "source": "JavaWeb/知识条目/后端/SQL注入.md",
+     "seq": 1,
+     "score": 0.720631
+    },
+    {
+     "rank": 2,
+     "chunk_id": 205,
+     "source": "数据库/知识条目/ACID.md",
+     "seq": 3,
+     "score": 0.589015
+    },
+    {
+     "rank": 3,
+     "chunk_id": 222,
+     "source": "数据库/知识条目/缓存.md",
+     "seq": 3,
+     "score": 0.545904
+    },
+    {
+     "rank": 4,
+     "chunk_id": 203,
+     "source": "数据库/知识条目/ACID.md",
+     "seq": 1,
+     "score": 0.535915
+    },
+    {
+     "rank": 5,
+     "chunk_id": 68,
+     "source": "JavaWeb/知识条目/后端/Tomcat.md",
+     "seq": 2,
+     "score": 0.543893
+    }
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "cited_sources": [
+    "JavaWeb/知识条目/后端/SQL注入.md",
+    "数据库/知识条目/ACID.md",
+    "数据库/知识条目/缓存.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 10325.771200004965,
+   "total_ms": 18557.744799996726,
+   "stage_ms": {
+    "vector": 3.99139997898601,
+    "embedding": 1064.5715999999084,
+    "judge": 924.4252000062261,
+    "generate": 16562.168400007067
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 2014,
+   "sentences": 6,
+   "uncited_sentences": 1,
+   "supported": 4,
+   "unsupported": 1,
+   "support_invalid": 0,
+   "support_calls": 5,
+   "unsupported_sentences": [
+    {
+     "sentence": "知识库中关于 SQL 注入的内容仅包含片段 [1] 中提到的上述三点建议。",
+     "ranks": [
+      1
+     ]
+    }
+   ]
+  },
+  {
+   "question_id": "R5",
+   "category": "R",
+   "text": "Docker 容器一删就什么都没了吗？有办法保留数据吗？",
+   "expected_source": "JavaWeb/知识条目/部署/Docker/Docker 数据卷（Volume）.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "**不，Docker 容器删除并不总是意味着数据消失，使用数据卷（Volume）可以保留数据。**\n\n根据知识库片段，具体说明如下：\n\n1.  **默认情况下容器数据可能与容器共存亡，但有例外**：\n    片段提到 Docker 镜像是用于创建容器的只读模板 [4]，而数据卷是独立于容器生命周期的机制 [1]。如果不使用数据卷，容器内部的文件系统变更通常随容器删除而消失（虽然片段未直接陈述“不使用卷会丢”，但强调了卷的价值在于“容器删除数据不丢” [2]）。\n\n2.  **使用数据卷（Volume）可以保留数据**：\n    *   **原理**：数据卷是 Docker 中用于持久化容器数据的机制，它独立于容器的生命周期。即使容器被删除，数据依然保留在卷中 [1]。\n    *   **核心价值**：数据卷的一个核心优势就是“数据持久化”，确保容器删除后数据不丢失 [2]。\n    *   **操作方式**：\n        *   可以使用 `docker volume create mydata` 创建卷 [2]。\n        *   在运行容器时，使用 `docker run -v mydata:/app/data nginx`（旧语法）或 `docker run --mount source=mydata,target=/app/data nginx`（推荐语法）将卷挂载到容器内 [2]。\n    *   **最佳实践**：对于生产环境数据，推荐使用由 Docker 管理的 Volume，因为它的备份迁移比较方便，且生命周期独立于容器 [1]、[2]。\n\n**注意**：片段中还提到了另一种挂载方式 **tmpfs**，它是内存存储，容器停止即清除，因此**不能**用于保留数据 [2]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 70,
+     "source": "JavaWeb/知识条目/部署/Docker/Docker 数据卷（Volume）.md",
+     "seq": 1,
+     "score": 0.687462
+    },
+    {
+     "rank": 2,
+     "chunk_id": 71,
+     "source": "JavaWeb/知识条目/部署/Docker/Docker 数据卷（Volume）.md",
+     "seq": 2,
+     "score": 0.67058
+    },
+    {
+     "rank": 3,
+     "chunk_id": 74,
+     "source": "JavaWeb/知识条目/部署/Docker/Docker 镜像.md",
+     "seq": 3,
+     "score": 0.588635
+    },
+    {
+     "rank": 4,
+     "chunk_id": 72,
+     "source": "JavaWeb/知识条目/部署/Docker/Docker 镜像.md",
+     "seq": 1,
+     "score": 0.572595
+    },
+    {
+     "rank": 5,
+     "chunk_id": 196,
+     "source": "数据库/Redis过期Key处理.md",
+     "seq": 20,
+     "score": 0.530871
+    }
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    2,
+    4
+   ],
+   "cited_sources": [
+    "JavaWeb/知识条目/部署/Docker/Docker 数据卷（Volume）.md",
+    "JavaWeb/知识条目/部署/Docker/Docker 镜像.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 9361.38689998188,
+   "total_ms": 26364.75999999675,
+   "stage_ms": {
+    "vector": 3.93209996400401,
+    "embedding": 1046.0754999949131,
+    "judge": 996.4463999785949,
+    "generate": 24314.674199995352
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 2459,
+   "sentences": 10,
+   "uncited_sentences": 2,
+   "supported": 6,
+   "unsupported": 2,
+   "support_invalid": 0,
+   "support_calls": 8,
+   "unsupported_sentences": [
+    {
+     "sentence": "如果不使用数据卷，容器内部的文件系统变更通常随容器删除而消失（虽然片段未直接陈述“不使用卷会丢”，但强调了卷的价值在于“容器删除数据不丢” [2]）。",
+     "ranks": [
+      2
+     ]
+    },
+    {
+     "sentence": "**注意**：片段中还提到了另一种挂载方式 **tmpfs**，它是内存存储，容器停止即清除，因此**不能**用于保留数据 [2]。",
+     "ranks": [
+      2
+     ]
+    }
+   ]
+  },
+  {
+   "question_id": "R6",
+   "category": "R",
+   "text": "Redis 和数据库怎么配合？缓存不一致怎么处理？",
+   "expected_source": "数据库/知识条目/缓存.md",
+   "decision": "PARTIAL",
+   "status": "PARTIAL",
+   "failure": null,
+   "answer": "基于提供的知识库片段，针对“Redis 和数据库怎么配合”以及“缓存不一致怎么处理”的回答如下：\n\n### 1. Redis 和数据库的配合方式\n根据片段 [1]，Redis 作为主流分布式缓存中间件，与数据库的配合主要通过以下几种主流策略实现：\n\n*   **Cache-Aside（旁路缓存）**：这是最常见的配合方式。\n    *   **读操作**：先查询 Redis 缓存，如果未命中则查询数据库，并将结果写入 Redis [1]。\n    *   **写操作**：先更新数据库，再删除或更新缓存 [1]。\n*   **Read/Write Through（读写穿透）**：应用只与 Redis 缓存交互，由缓存层直接代理读写操作对接底层存储（数据库） [1]。\n*   **Write Behind（异步写回）**：写操作只更新 Redis 缓存，由后台任务异步将数据刷入数据库。这种方式性能最高，但一致性风险最大 [1]。\n\n此外，Redis 在层级上通常位于 Nginx 缓存和应用本地缓存（如 Caffeine）之后，作为分布式缓存层，用于加速读请求并降低数据库负载 [1]。\n\n*注意：片段 [2] 提及了 Redis 的持久化机制（RDB、AOF），这是保障 Redis 数据安全的核心，防止断电数据丢失，但片段未详细展开具体的配合细节，仅指出这是数据安全的核心机制 [2]。*\n\n### 2. 缓存不一致的处理\n根据片段 [1]，在分布式场景下，Redis 与数据库之间存在一致性问题。常见的处理思路如下：\n\n*   **核心策略**：采用**“先更新数据库，再删除缓存”**的策略 [1]。\n*   **一致性保证**：配合**消息队列**或 **CDC（变更数据捕获）** 机制，以保证数据的最终一致性 [1]。\n\n### 3. 覆盖边界声明\n*   **已有内容**：上述回答完全基于片段 [1] 中关于缓存策略和一致性处理的描述。片段 [2]、[3]、[4]、[5] 分别讨论了 Redis 的持久化原理、事务特性（原子性、无回滚）、以及过期 Key 的处理机制。虽然 [3] 和 [4] 提到 Redis 事务不具备 ACID 特性且无回滚机制，这可能间接影响一致性设计的考量，但片段中并未直接将其与“数据库一致性处理”关联起来进行详细阐述，因此未将其作为一致性处理的主要依据。\n*   **未覆盖部分**：知识库中**没有**包含以下关于“Redis 与数据库配合”及“不一致处理”的信息，因此无法回答：\n    *   具体的 Redis 与数据库选型对比（如 MySQL vs PostgreSQL）。\n    *   双写一致性的高可用部署架构细节。\n    *   具体的代码实现或配置示例。\n    *   除“先更新DB再删缓存”以外的其他具体一致性算法（如读旧写新等细节，虽提到了读写穿透但未展开一致性细节）。\n    *   片段 [2] 中提到的 RDB/AOF 具体如何配合数据库进行数据同步的细节。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 222,
+     "source": "数据库/知识条目/缓存.md",
+     "seq": 3,
+     "score": 0.707462
+    },
+    {
+     "rank": 2,
+     "chunk_id": 148,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 1,
+     "score": 0.691415
+    },
+    {
+     "rank": 3,
+     "chunk_id": 210,
+     "source": "数据库/知识条目/Redis 事务.md",
+     "seq": 1,
+     "score": 0.665336
+    },
+    {
+     "rank": 4,
+     "chunk_id": 211,
+     "source": "数据库/知识条目/Redis 事务.md",
+     "seq": 2,
+     "score": 0.675699
+    },
+    {
+     "rank": 5,
+     "chunk_id": 177,
+     "source": "数据库/Redis过期Key处理.md",
+     "seq": 1,
+     "score": 0.641977
+    }
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    2,
+    3,
+    4,
+    5
+   ],
+   "cited_sources": [
+    "数据库/Redis/Redis持久化.md",
+    "数据库/Redis过期Key处理.md",
+    "数据库/知识条目/Redis 事务.md",
+    "数据库/知识条目/缓存.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 6588.743300002534,
+   "total_ms": 193211.7834999808,
+   "stage_ms": {
+    "vector": 3.2278000144287944,
+    "embedding": 957.2562999965157,
+    "judge": 969.2309999954887,
+    "generate": 191277.030199999
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 1617,
+   "sentences": 22,
+   "uncited_sentences": 9,
+   "supported": 8,
+   "unsupported": 5,
+   "support_invalid": 0,
+   "support_calls": 13,
+   "unsupported_sentences": [
+    {
+     "sentence": "*注意：片段 [2] 提及了 Redis 的持久化机制（RDB、AOF），这是保障 Redis 数据安全的核心，防止断电数据丢失，但片段未详细展开具体的配合细节，仅指出这是数据安全的核心机制 [2]。",
+     "ranks": [
+      2
+     ]
+    },
+    {
+     "sentence": "根据片段 [1]，在分布式场景下，Redis 与数据库之间存在一致性问题。",
+     "ranks": [
+      1
+     ]
+    },
+    {
+     "sentence": "片段 [2]、[3]、[4]、[5] 分别讨论了 Redis 的持久化原理、事务特性（原子性、无回滚）、以及过期 Key 的处理机制。",
+     "ranks": [
+      2,
+      3,
+      4,
+      5
+     ]
+    },
+    {
+     "sentence": "虽然 [3] 和 [4] 提到 Redis 事务不具备 ACID 特性且无回滚机制，这可能间接影响一致性设计的考量，但片段中并未直接将其与“数据库一致性处理”关联起来进行详细阐述，因此未将其作为一致性处理的主要依据。",
+     "ranks": [
+      3,
+      4
+     ]
+    },
+    {
+     "sentence": "片段 [2] 中提到的 RDB/AOF 具体如何配合数据库进行数据同步的细节。",
+     "ranks": [
+      2
+     ]
+    }
+   ]
+  },
+  {
+   "question_id": "Q17",
+   "category": "Q",
+   "text": "HTTP 是无状态协议，那登录状态是怎么保持的？Cookie 和 Session 分别存在哪边？",
+   "expected_source": "JavaWeb/知识条目/后端/Cookie 和 Session.md",
+   "decision": "PARTIAL",
+   "status": "PARTIAL",
+   "failure": null,
+   "answer": "**回答：**\n\n登录状态通过会话技术保存，例如使用 Cookie 和 Session 来维持登录状态、用户标识等信息 [1]。在登录校验场景中，常结合过滤器（Filter）实现，并通过 Session 保存用户信息 [1]。\n\n关于存储位置：\n*   **Cookie** 保存在**浏览器端** [2]。\n*   **Session** 保存在**服务器端** [2]。\n\n**覆盖边界说明：**\n知识库片段 [1] 和 [2] 仅提供了 Cookie 和 Session 的存储位置及其在维持登录状态中的基本作用。片段未包含 HTTP 协议本身无状态的具体技术细节，也未详细解释 Cookie 和 Session 之间如何具体交互以保持会话（例如 Cookie 中存储的 Token 如何被服务器用来查找 Session 等具体机制），且片段 [3]、[4] 涉及前端 Pinia 持久化，与后端 HTTP 会话保持无直接关系，片段 [5] 涉及数据库事务，与本题无关。因此，关于“Cookie 和 Session 如何协同工作”的详细机制在给定片段中未覆盖，无法基于片段作答。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 62,
+     "source": "JavaWeb/知识条目/后端/Cookie 和 Session.md",
+     "seq": 1,
+     "score": 0.7794
+    },
+    {
+     "rank": 2,
+     "chunk_id": 63,
+     "source": "JavaWeb/知识条目/后端/Cookie 和 Session.md",
+     "seq": 2,
+     "score": 0.69818
+    },
+    {
+     "rank": 3,
+     "chunk_id": 45,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 18,
+     "score": 0.599747
+    },
+    {
+     "rank": 4,
+     "chunk_id": 28,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 1,
+     "score": 0.541961
+    },
+    {
+     "rank": 5,
+     "chunk_id": 205,
+     "source": "数据库/知识条目/ACID.md",
+     "seq": 3,
+     "score": 0.532849
+    }
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    2,
+    3,
+    4,
+    5
+   ],
+   "cited_sources": [
+    "JavaWeb/Web前端设计/Pinia状态管理.md",
+    "JavaWeb/知识条目/后端/Cookie 和 Session.md",
+    "数据库/知识条目/ACID.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 4679.159999999683,
+   "total_ms": 8406.140400009463,
+   "stage_ms": {
+    "vector": 10.589899990009144,
+    "embedding": 990.9733000095002,
+    "judge": 639.6115999959875,
+    "generate": 6762.027000018861
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 2288,
+   "sentences": 7,
+   "uncited_sentences": 1,
+   "supported": 5,
+   "unsupported": 1,
+   "support_invalid": 0,
+   "support_calls": 6,
+   "unsupported_sentences": [
+    {
+     "sentence": "知识库片段 [1] 和 [2] 仅提供了 Cookie 和 Session 的存储位置及其在维持登录状态中的基本作用。",
+     "ranks": [
+      1,
+      2
+     ]
+    }
+   ]
+  },
+  {
+   "question_id": "Q18",
+   "category": "Q",
+   "text": "Redis 的 key 设置过期时间后，到期就会被立即删除吗？实际的删除策略是什么？",
+   "expected_source": "数据库/Redis过期Key处理.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "Redis 的 key 设置过期时间后，到期**不会**立即被删除 [1]。\n\n实际的删除策略是**惰性删除**与**定期删除**两种策略协同工作，确保过期的 key 最终被清理 [2]。具体机制如下：\n\n1.  **惰性删除（Lazy Expiration）**：\n    *   当 key 被访问（例如执行 `GET` 命令）时，Redis 会检查该 key 是否已过期 [4]。\n    *   如果已过期，则立即删除该 key 并返回 null；如果未过期，则正常返回值 [4]。\n    *   这种策略是精确但被动的，如果 key 长期不被访问，惰性删除就无法处理 [5]。\n\n2.  **定期删除（Active Expiration）**：\n    *   Redis 后台会定时进行抽样检查，批量删除过期的 key [2]。\n    *   这种策略是主动但粗糙的，它作为兜底机制，负责清理那些没有被访问到因而未被惰性删除的过期 key [5]。\n\n此外，还有**内存淘汰（Eviction）**策略，即在内存满时按策略淘汰 key（包含过期 key 和普通 key） [2]。但针对过期 key 的核心清理机制主要依赖于上述惰性删除和定期删除的配合 [5]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 177,
+     "source": "数据库/Redis过期Key处理.md",
+     "seq": 1,
+     "score": 0.841352
+    },
+    {
+     "rank": 2,
+     "chunk_id": 182,
+     "source": "数据库/Redis过期Key处理.md",
+     "seq": 6,
+     "score": 0.848635
+    },
+    {
+     "rank": 3,
+     "chunk_id": 178,
+     "source": "数据库/Redis过期Key处理.md",
+     "seq": 2,
+     "score": 0.733412
+    },
+    {
+     "rank": 4,
+     "chunk_id": 183,
+     "source": "数据库/Redis过期Key处理.md",
+     "seq": 7,
+     "score": 0.81231
+    },
+    {
+     "rank": 5,
+     "chunk_id": 202,
+     "source": "数据库/Redis过期Key处理.md",
+     "seq": 26,
+     "score": 0.737383
+    }
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    2,
+    4,
+    5
+   ],
+   "cited_sources": [
+    "数据库/Redis过期Key处理.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 12688.17019998096,
+   "total_ms": 26879.773699998623,
+   "stage_ms": {
+    "vector": 4.227099998388439,
+    "embedding": 993.9133999869227,
+    "judge": 1516.3237000233494,
+    "generate": 24363.136300002225
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 1690,
+   "sentences": 9,
+   "uncited_sentences": 0,
+   "supported": 7,
+   "unsupported": 2,
+   "support_invalid": 0,
+   "support_calls": 9,
+   "unsupported_sentences": [
+    {
+     "sentence": "实际的删除策略是**惰性删除**与**定期删除**两种策略协同工作，确保过期的 key 最终被清理 [2]。",
+     "ranks": [
+      2
+     ]
+    },
+    {
+     "sentence": "这种策略是主动但粗糙的，它作为兜底机制，负责清理那些没有被访问到因而未被惰性删除的过期 key [5]。",
+     "ranks": [
+      5
+     ]
+    }
+   ]
+  },
+  {
+   "question_id": "Q19",
+   "category": "Q",
+   "text": "Redis 事务和 MySQL 事务有什么区别？Redis 事务执行到一半出错了会回滚吗？",
+   "expected_source": "数据库/知识条目/Redis 事务.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "基于提供的知识库片段，Redis 事务与 MySQL 事务的区别以及 Redis 事务出错后的处理机制如下：\n\n**1. Redis 事务与 MySQL（关系型数据库）事务的主要区别**\n\n*   **ACID 特性支持不同**：Redis 事务不具备严格的 ACID 特性 [1]。具体来说：\n    *   **原子性**：仅部分支持。如果命令排队成功，则全部执行；但执行过程中的错误不会回滚已执行的命令 [2]。\n    *   **一致性**：不支持。语法错误会导致事务不执行，而运行时错误仅导致该条命令失败，其他命令继续执行 [2]。\n    *   **隔离性**：支持。事务中的命令序列化执行，中间不会插入其他客户端的命令 [1][2]。\n    *   **持久性**：不支持作为事务特有属性，主要取决于持久化配置（如 RDB/AOF） [2]。\n*   **回滚机制**：MySQL 等关系型数据库事务通常具备回滚能力，而 Redis 事务**无回滚机制** [1][2]。\n*   **设计目标**：Redis 事务的设计目标是简单快速，而非追求强一致性 [2]。\n\n**2. Redis 事务执行到一半出错是否会回滚？**\n\n**不会回滚。**\n\n*   根据片段描述，Redis 事务缺少回滚机制 [1]。\n*   如果某条命令在执行过程中失败（运行时错误），其他命令仍会继续执行，不会撤销之前已执行的操作 [2]。\n*   具体的错误处理逻辑为：\n    *   如果在 EXEC 之前检测到**语法错误**，整个事务将不执行 [2]。\n    *   如果在 EXEC 时触发**运行时错误**，仅该特定命令失败，队列中的其他命令继续执行 [2]。\n\n因此，如果需要在出错时保证原子性并支持回滚逻辑，片段建议考虑使用 Lua 脚本，而不是标准的 Redis 事务 [2]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 211,
+     "source": "数据库/知识条目/Redis 事务.md",
+     "seq": 2,
+     "score": 0.782298
+    },
+    {
+     "rank": 2,
+     "chunk_id": 212,
+     "source": "数据库/知识条目/Redis 事务.md",
+     "seq": 3,
+     "score": 0.764834
+    },
+    {
+     "rank": 3,
+     "chunk_id": 210,
+     "source": "数据库/知识条目/Redis 事务.md",
+     "seq": 1,
+     "score": 0.749129
+    },
+    {
+     "rank": 4,
+     "chunk_id": 188,
+     "source": "数据库/Redis过期Key处理.md",
+     "seq": 12,
+     "score": 0.610027
+    },
+    {
+     "rank": 5,
+     "chunk_id": 177,
+     "source": "数据库/Redis过期Key处理.md",
+     "seq": 1,
+     "score": 0.612386
+    }
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    2
+   ],
+   "cited_sources": [
+    "数据库/知识条目/Redis 事务.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 2903.134599997429,
+   "total_ms": 9320.685100014089,
+   "stage_ms": {
+    "vector": 20.186000008834526,
+    "embedding": 1032.5950999977067,
+    "judge": 1207.0733000000473,
+    "generate": 7058.7457999936305
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 1717,
+   "sentences": 17,
+   "uncited_sentences": 5,
+   "supported": 11,
+   "unsupported": 1,
+   "support_invalid": 0,
+   "support_calls": 12,
+   "unsupported_sentences": [
+    {
+     "sentence": "因此，如果需要在出错时保证原子性并支持回滚逻辑，片段建议考虑使用 Lua 脚本，而不是标准的 Redis 事务 [2]。",
+     "ranks": [
+      2
+     ]
+    }
+   ]
+  },
+  {
+   "question_id": "Q20",
+   "category": "Q",
+   "text": "epoll 和 select/poll 相比优势在哪？为什么高并发服务器都用 epoll？",
+   "expected_source": "数据库/知识条目/epoll（Linux 高并发网络模型）.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "根据提供的知识库片段，epoll 相比 select/poll 的优势以及高并发服务器采用它的原因如下：\n\n**1. 核心优势对比**\n\n*   **管理方式与效率**：\n    *   select/poll 采用线性轮询，每次调用都需要拷贝全部 FD，时间复杂度为 O(n) [2]。\n    *   epoll 采用事件回调机制，并通过红黑树（RB-Tree）管理所有被监控的 FD，实现高效增删改查 [2][3]。\n    *   因此，epoll 的时间复杂度为 O(1)，因为它仅处理活跃的 FD，避免了无效轮询 [2][4]。\n\n*   **数据拷贝开销**：\n    *   select/poll 每次调用均需从用户态拷贝 FD 集合到内核，存在较高的数据拷贝开销 [2]。\n    *   epoll 内核与用户态共享内存（通过 mmap），避免了数据拷贝 [2]。\n\n*   **FD 数量限制**：\n    *   select 对 FD 数量有限制（默认 1024）[2]。\n    *   epoll 仅受系统最大文件句柄数限制，能处理大量文件描述符 [2][4]。\n\n*   **触发模式灵活**：\n    *   epoll 支持 LT（水平触发）和 ET（边缘触发）两种模式。其中 ET 模式只在状态变化时通知一次，配合非阻塞 IO 可进一步提升性能 [3]。\n\n**2. 高并发服务器选用 epoll 的原因**\n\n*   **解决并发瓶颈**：epoll 通过事件驱动回调机制，解决了传统 select/poll 的并发瓶颈 [1]。\n*   **高性能基础**：它是 Nginx、Redis 等高性能服务的基础，适用于 Web 服务器、游戏服务端等高并发场景 [1][2]。\n*   **事件驱动模型**：Nginx 等服务器通过异步非阻塞的事件驱动模型处理高并发请求，而 epoll 正是实现这种高效 I/O 多路复用的关键内核机制 [1][5]。\n\n综上所述，由于 epoll 在时间复杂度、数据拷贝开销、FD 数量上限以及触发模式上的优势，使其成为高并发服务器处理大量连接的首选方案 [1][2][4]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 206,
+     "source": "数据库/知识条目/epoll（Linux 高并发网络模型）.md",
+     "seq": 1,
+     "score": 0.730894
+    },
+    {
+     "rank": 2,
+     "chunk_id": 209,
+     "source": "数据库/知识条目/epoll（Linux 高并发网络模型）.md",
+     "seq": 4,
+     "score": 0.624497
+    },
+    {
+     "rank": 3,
+     "chunk_id": 208,
+     "source": "数据库/知识条目/epoll（Linux 高并发网络模型）.md",
+     "seq": 3,
+     "score": 0.655917
+    },
+    {
+     "rank": 4,
+     "chunk_id": 207,
+     "source": "数据库/知识条目/epoll（Linux 高并发网络模型）.md",
+     "seq": 2,
+     "score": 0.680698
+    },
+    {
+     "rank": 5,
+     "chunk_id": 26,
+     "source": "JavaWeb/Web前端设计/Nginx 反向代理服务器.md",
+     "seq": 2,
+     "score": 0.486822
+    }
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    2,
+    3,
+    4,
+    5
+   ],
+   "cited_sources": [
+    "JavaWeb/Web前端设计/Nginx 反向代理服务器.md",
+    "数据库/知识条目/epoll（Linux 高并发网络模型）.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 5974.319000000833,
+   "total_ms": 13037.882200005697,
+   "stage_ms": {
+    "vector": 17.355000047245994,
+    "embedding": 1072.421499993652,
+    "judge": 1791.1398000142071,
+    "generate": 10152.975699980743
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 1612,
+   "sentences": 13,
+   "uncited_sentences": 1,
+   "supported": 11,
+   "unsupported": 1,
+   "support_invalid": 0,
+   "support_calls": 12,
+   "unsupported_sentences": [
+    {
+     "sentence": "epoll 采用事件回调机制，并通过红黑树（RB-Tree）管理所有被监控的 FD，实现高效增删改查 [2][3]。",
+     "ranks": [
+      2,
+      3
+     ]
+    }
+   ]
+  },
+  {
+   "question_id": "Q21",
+   "category": "Q",
+   "text": "为什么文件写完并返回成功，断电后数据还是可能丢？怎么强制立即落盘？",
+   "expected_source": "数据库/知识条目/操作系统缓冲区（OS Buffer）.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "**为什么文件写完并返回成功，断电后数据还是可能丢？**\n\n因为操作系统通常采用 **Write-back（写回）** 模式。在这种模式下，数据写入内存缓冲区（如 Page Cache）后即返回成功，而实际的落盘操作由内核后台线程（如 Linux 的 `pdflush` 或 `flush`）异步执行 [4]。因此，如果在数据真正写入物理磁盘之前发生断电或崩溃，位于 OS 缓冲区中未刷盘的数据就会丢失 [4]。在 Redis 中，如果配置了 `appendfsync no`，刷盘频率由 OS 控制（通常 30 秒一次），此时系统崩溃可能导致丢失 OS 缓冲区中未刷盘的所有数据 [3]，[1]。\n\n**怎么强制立即落盘？**\n\n应用程序可以通过系统调用 **`fsync`** 或 **`fdatasync`** 来强制数据立即从缓冲区写入磁盘 [4]。具体到 Redis 配置中，可以将 `appendfsync` 参数设置为 **`always`**，这样每次写命令都会触发 `fsync`，从而确保数据立即落盘，最多丢失 0 条数据 [3]，[4]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 173,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 26,
+     "score": 0.650091
+    },
+    {
+     "rank": 2,
+     "chunk_id": 196,
+     "source": "数据库/Redis过期Key处理.md",
+     "seq": 20,
+     "score": 0.607189
+    },
+    {
+     "rank": 3,
+     "chunk_id": 159,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 12,
+     "score": 0.589809
+    },
+    {
+     "rank": 4,
+     "chunk_id": 219,
+     "source": "数据库/知识条目/操作系统缓冲区（OS Buffer）.md",
+     "seq": 3,
+     "score": 0.572244
+    },
+    {
+     "rank": 5,
+     "chunk_id": 176,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 29,
+     "score": 0.60876
+    }
+   ],
+   "expected_rank": 4,
+   "cited_ranks": [
+    1,
+    3,
+    4
+   ],
+   "cited_sources": [
+    "数据库/Redis/Redis持久化.md",
+    "数据库/知识条目/操作系统缓冲区（OS Buffer）.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 2817.2444999800064,
+   "total_ms": 22966.126599989366,
+   "stage_ms": {
+    "vector": 5.107000004500151,
+    "embedding": 970.0271000037901,
+    "judge": 843.4939999715425,
+    "generate": 21144.370900001377
+   },
+   "model_calls": 4,
+   "attempts": 2,
+   "generate_prompt_chars": 2203,
+   "sentences": 8,
+   "uncited_sentences": 3,
+   "supported": 5,
+   "unsupported": 0,
+   "support_invalid": 0,
+   "support_calls": 5,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "Q22",
+   "category": "Q",
+   "text": "Vue 的 onMounted 是什么时机执行的？为什么异步请求要放在它里面而不是 setup 里？",
+   "expected_source": "JavaWeb/知识条目/前端/onMounted生命周期函数.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "根据提供的知识库片段，回答如下：\n\n**1. Vue 的 onMounted 是什么时机执行的？**\n\n*   `onMounted` 是 Vue 3 组合式 API（Composition API）提供的生命周期钩子函数，等价于 Vue 2 Options API 中的 `mounted` 选项 [3]。\n*   它在组件完成初始渲染、真实 DOM 已创建并插入页面后执行，且仅执行一次 [1]。\n*   在 Vue 3 中，它需从 `vue` 导入，并在 `setup()` 中同步注册 [1]。\n*   其执行顺序为：父组件的 `onMounted` 会在所有子组件挂载完成后执行 [1]。\n*   需要注意的是，在服务端渲染（SSR）环境下，`onMounted` 不会执行，仅在客户端执行 [1]。\n\n**2. 为什么异步请求要放在它里面而不是 setup 里？**\n\n*   **DOM 可用性**：`setup` 执行时 DOM 尚未生成，无法操作 DOM；而 `onMounted` 保证 DOM 已存在 [1]。\n*   **最佳时机**：`onMounted` 是执行 DOM 操作和发起异步请求的最佳时机 [2]。虽然 `onMounted` 本身不支持 `async/await`，但可在回调内部使用异步函数发起 API 请求 [1]。\n*   **实际场景**：例如在 Layout 组件中，可以在 `onMounted` 中初始化 Store 数据，如调用 `loadDepartments` 和 `loadAllEmployees` [4]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 59,
+     "source": "JavaWeb/知识条目/前端/onMounted生命周期函数.md",
+     "seq": 3,
+     "score": 0.76941
+    },
+    {
+     "rank": 2,
+     "chunk_id": 57,
+     "source": "JavaWeb/知识条目/前端/onMounted生命周期函数.md",
+     "seq": 1,
+     "score": 0.709261
+    },
+    {
+     "rank": 3,
+     "chunk_id": 58,
+     "source": "JavaWeb/知识条目/前端/onMounted生命周期函数.md",
+     "seq": 2,
+     "score": 0.738476
+    },
+    {
+     "rank": 4,
+     "chunk_id": 48,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 21,
+     "score": 0.599017
+    },
+    {
+     "rank": 5,
+     "chunk_id": 56,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 29,
+     "score": 0.514605
+    }
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "cited_sources": [
+    "JavaWeb/Web前端设计/Pinia状态管理.md",
+    "JavaWeb/知识条目/前端/onMounted生命周期函数.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 2624.551099987002,
+   "total_ms": 9595.07000001031,
+   "stage_ms": {
+    "vector": 16.393300000345334,
+    "embedding": 1108.3437000052072,
+    "judge": 848.8920999807306,
+    "generate": 7617.5996999954805
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 2099,
+   "sentences": 11,
+   "uncited_sentences": 2,
+   "supported": 9,
+   "unsupported": 0,
+   "support_invalid": 0,
+   "support_calls": 9,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "N8",
+   "category": "N",
+   "text": "Redis 的主从复制怎么配置？集群模式怎么搭建？",
+   "expected_source": null,
+   "decision": "NONE",
+   "status": "REFUSED",
+   "failure": null,
+   "answer": "知识库中没有找到能回答这个问题的内容。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 170,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 23,
+     "score": 0.616696
+    },
+    {
+     "rank": 2,
+     "chunk_id": 164,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 17,
+     "score": 0.603504
+    },
+    {
+     "rank": 3,
+     "chunk_id": 171,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 24,
+     "score": 0.580583
+    },
+    {
+     "rank": 4,
+     "chunk_id": 188,
+     "source": "数据库/Redis过期Key处理.md",
+     "seq": 12,
+     "score": 0.558811
+    },
+    {
+     "rank": 5,
+     "chunk_id": 148,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 1,
+     "score": 0.58018
+    }
+   ],
+   "expected_rank": null,
+   "cited_ranks": [],
+   "cited_sources": [],
+   "wrong_source": null,
+   "first_text_ms": null,
+   "total_ms": 9048.89700000058,
+   "stage_ms": {
+    "vector": 7.000200013862923,
+    "embedding": 881.6858000063803,
+    "judge": 8159.980999975232
+   },
+   "model_calls": 1,
+   "attempts": 1,
+   "generate_prompt_chars": null,
+   "sentences": 0,
+   "uncited_sentences": 0,
+   "supported": null,
+   "unsupported": null,
+   "support_invalid": null,
+   "support_calls": 0,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "N9",
+   "category": "N",
+   "text": "Docker Compose 怎么编排多个容器？",
+   "expected_source": null,
+   "decision": "NONE",
+   "status": "REFUSED",
+   "failure": null,
+   "answer": "知识库中没有找到能回答这个问题的内容。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 72,
+     "source": "JavaWeb/知识条目/部署/Docker/Docker 镜像.md",
+     "seq": 1,
+     "score": 0.621005
+    },
+    {
+     "rank": 2,
+     "chunk_id": 70,
+     "source": "JavaWeb/知识条目/部署/Docker/Docker 数据卷（Volume）.md",
+     "seq": 1,
+     "score": 0.596856
+    },
+    {
+     "rank": 3,
+     "chunk_id": 71,
+     "source": "JavaWeb/知识条目/部署/Docker/Docker 数据卷（Volume）.md",
+     "seq": 2,
+     "score": 0.604151
+    },
+    {
+     "rank": 4,
+     "chunk_id": 74,
+     "source": "JavaWeb/知识条目/部署/Docker/Docker 镜像.md",
+     "seq": 3,
+     "score": 0.609425
+    },
+    {
+     "rank": 5,
+     "chunk_id": 4,
+     "source": "JavaWeb/JavaWeb后端开发/会话管理与登陆校验/Interceptor拦截器技术.md",
+     "seq": 4,
+     "score": 0.555867
+    }
+   ],
+   "expected_rank": null,
+   "cited_ranks": [],
+   "cited_sources": [],
+   "wrong_source": null,
+   "first_text_ms": null,
+   "total_ms": 1840.0296999898273,
+   "stage_ms": {
+    "vector": 6.472000008216128,
+    "embedding": 1008.7226000032388,
+    "judge": 824.6568999893498
+   },
+   "model_calls": 1,
+   "attempts": 1,
+   "generate_prompt_chars": null,
+   "sentences": 0,
+   "uncited_sentences": 0,
+   "supported": null,
+   "unsupported": null,
+   "support_invalid": null,
+   "support_calls": 0,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "N10",
+   "category": "N",
+   "text": "Spring Boot 的自动装配是怎么工作的？",
+   "expected_source": null,
+   "decision": "NONE",
+   "status": "REFUSED",
+   "failure": null,
+   "answer": "知识库中没有找到能回答这个问题的内容。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 60,
+     "source": "JavaWeb/知识条目/后端/Bean.md",
+     "seq": 1,
+     "score": 0.494709
+    },
+    {
+     "rank": 2,
+     "chunk_id": 55,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 28,
+     "score": 0.497242
+    },
+    {
+     "rank": 3,
+     "chunk_id": 186,
+     "source": "数据库/Redis过期Key处理.md",
+     "seq": 10,
+     "score": 0.43846
+    },
+    {
+     "rank": 4,
+     "chunk_id": 152,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 5,
+     "score": 0.445177
+    },
+    {
+     "rank": 5,
+     "chunk_id": 3,
+     "source": "JavaWeb/JavaWeb后端开发/会话管理与登陆校验/Interceptor拦截器技术.md",
+     "seq": 3,
+     "score": 0.429329
+    }
+   ],
+   "expected_rank": null,
+   "cited_ranks": [],
+   "cited_sources": [],
+   "wrong_source": null,
+   "first_text_ms": null,
+   "total_ms": 1364.37989998376,
+   "stage_ms": {
+    "vector": 11.115300032543018,
+    "embedding": 767.9961000103503,
+    "judge": 585.0276999990456
+   },
+   "model_calls": 1,
+   "attempts": 1,
+   "generate_prompt_chars": null,
+   "sentences": 0,
+   "uncited_sentences": 0,
+   "supported": null,
+   "unsupported": null,
+   "support_invalid": null,
+   "support_calls": 0,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "P2",
+   "category": "P",
+   "text": "vLLM 的 PagedAttention 是怎么工作的？借鉴了操作系统的什么机制？",
+   "expected_source": null,
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "vLLM 的 PagedAttention 工作机制及借鉴的机制如下：\n\n1.  **借鉴机制**：PagedAttention 仿照了**操作系统虚拟内存**的机制 [1]。\n2.  **具体工作方式**：\n    *   **解决痛点**：针对传统 KV Cache 需预先分配连续显存导致的内存碎片化和闲置浪费问题 [1]。\n    *   **分页存储**：将 KV Cache 切分成固定大小的“页”（Pages）[1]。\n    *   **非连续映射**：这些页存储在**非连续的物理显存**中 [1]。\n    *   **查找机制**：通过**逻辑块映射**来查找对应的数据 [1]。\n    *   **效果**：这种方式使得**显存利用率提升至接近 100%** [1]。\n\n*注：片段中未提供 PagedAttention 在推理过程中具体的计算细节（如如何与新 Token 交互），仅描述了其显存管理的工作机制。*",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 123,
+     "source": "大模型应用/知识条目/KV Cache.md",
+     "seq": 8,
+     "score": 0.750845
+    },
+    {
+     "rank": 2,
+     "chunk_id": 127,
+     "source": "大模型应用/知识条目/KV Cache.md",
+     "seq": 12,
+     "score": 0.502568
+    },
+    {
+     "rank": 3,
+     "chunk_id": 119,
+     "source": "大模型应用/知识条目/KV Cache.md",
+     "seq": 4,
+     "score": 0.51258
+    },
+    {
+     "rank": 4,
+     "chunk_id": 219,
+     "source": "数据库/知识条目/操作系统缓冲区（OS Buffer）.md",
+     "seq": 3,
+     "score": 0.472466
+    },
+    {
+     "rank": 5,
+     "chunk_id": 126,
+     "source": "大模型应用/知识条目/KV Cache.md",
+     "seq": 11,
+     "score": 0.468199
+    }
+   ],
+   "expected_rank": null,
+   "cited_ranks": [
+    1
+   ],
+   "cited_sources": [
+    "大模型应用/知识条目/KV Cache.md"
+   ],
+   "wrong_source": null,
+   "first_text_ms": 2695.0939999951515,
+   "total_ms": 9699.1744999832,
+   "stage_ms": {
+    "vector": 4.820000031031668,
+    "embedding": 967.9862999764737,
+    "judge": 782.0715999987442,
+    "generate": 7942.046999989543
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 1876,
+   "sentences": 7,
+   "uncited_sentences": 1,
+   "supported": 5,
+   "unsupported": 1,
+   "support_invalid": 0,
+   "support_calls": 6,
+   "unsupported_sentences": [
+    {
+     "sentence": "**查找机制**：通过**逻辑块映射**来查找对应的数据 [1]。",
+     "ranks": [
+      1
+     ]
+    }
+   ]
+  },
+  {
+   "question_id": "R7",
+   "category": "R",
+   "text": "Redis 里一下子设了一万个相同过期时间的 key，到期后内存占用怎么没降下来？",
+   "expected_source": "数据库/Redis过期Key处理.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "根据提供的知识库片段，Redis 中批量设置相同过期时间的 Key 到期后内存未立即释放的原因及机制如下：\n\n**1. “过期”不等于“立即删除”**\nRedis 的 Key 设置过期时间后，并不保证在到达该时间点时被立即删除 [1]。Redis 不会在 key 过期的那一刻立即删除它 [3]。\n\n**2. 内存回收依赖三种策略协同工作**\n过期 Key 的清理依靠以下三种策略的配合 [3]：\n*   **惰性删除（Lazy Expiration）**：只有当 Key 被访问时，系统才会检查其是否过期并删除。如果该批 Key 到期后没有客户端再次访问，惰性删除策略不会触发，Key 依然保留在内存中 [3]。\n*   **定期删除（Active Expiration）**：Redis 后台通过定时抽样检查来批量删除过期 Key [3]。这是一个逐步清理的过程，而非瞬时完成。例如，若 100 万个 Key 全部在 T=1s 时过期且之后无访问，在 T=1s~5s 期间，由于惰性删除未触发，Key 仍在内存中，而定期删除仅在后台逐步清理（如假设每秒清理 10 万个） [5]。\n*   **内存淘汰（Eviction）**：仅当内存达到上限时，才会按策略淘汰 Key [3]。\n\n**3. 批量相同过期时间导致的后果**\n如果大量 Key（如一万或更多）设置相同的过期时间，在到期瞬间，如果这些 Key 恰好被访问，会触发大量的惰性删除检查，结合后台的定期删除抽样，会导致瞬时 CPU 和 IO 压力增大，造成性能抖动 [2]。\n\n**总结**\n内存占用未立即下降是因为：\n1.  如果没有新的访问请求，惰性删除机制不会主动清理这些 Key [3][5]。\n2.  定期删除机制是后台定时抽样清理，需要一定时间逐步回收内存，而非瞬间释放 [3][5]。\n3.  大量 Key 同时过期属于“陷阱三”场景，建议避免使用相同的过期时间，而是使用 TTL 加随机偏移来缓解压力 [2]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 177,
+     "source": "数据库/Redis过期Key处理.md",
+     "seq": 1,
+     "score": 0.749794
+    },
+    {
+     "rank": 2,
+     "chunk_id": 198,
+     "source": "数据库/Redis过期Key处理.md",
+     "seq": 22,
+     "score": 0.725724
+    },
+    {
+     "rank": 3,
+     "chunk_id": 182,
+     "source": "数据库/Redis过期Key处理.md",
+     "seq": 6,
+     "score": 0.737045
+    },
+    {
+     "rank": 4,
+     "chunk_id": 178,
+     "source": "数据库/Redis过期Key处理.md",
+     "seq": 2,
+     "score": 0.690747
+    },
+    {
+     "rank": 5,
+     "chunk_id": 192,
+     "source": "数据库/Redis过期Key处理.md",
+     "seq": 16,
+     "score": 0.673866
+    }
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    2,
+    3,
+    5
+   ],
+   "cited_sources": [
+    "数据库/Redis过期Key处理.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 3418.8920999877155,
+   "total_ms": 11333.595199976116,
+   "stage_ms": {
+    "vector": 6.699599995044991,
+    "embedding": 888.7945000024047,
+    "judge": 1286.6795999871101,
+    "generate": 9149.80949999881
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 1581,
+   "sentences": 12,
+   "uncited_sentences": 2,
+   "supported": 6,
+   "unsupported": 4,
+   "support_invalid": 0,
+   "support_calls": 10,
+   "unsupported_sentences": [
+    {
+     "sentence": "如果该批 Key 到期后没有客户端再次访问，惰性删除策略不会触发，Key 依然保留在内存中 [3]。",
+     "ranks": [
+      3
+     ]
+    },
+    {
+     "sentence": "**内存淘汰（Eviction）**：仅当内存达到上限时，才会按策略淘汰 Key [3]。",
+     "ranks": [
+      3
+     ]
+    },
+    {
+     "sentence": "如果大量 Key（如一万或更多）设置相同的过期时间，在到期瞬间，如果这些 Key 恰好被访问，会触发大量的惰性删除检查，结合后台的定期删除抽样，会导致瞬时 CPU 和 IO 压力增大，造成性能抖动 [2]。",
+     "ranks": [
+      2
+     ]
+    },
+    {
+     "sentence": "如果没有新的访问请求，惰性删除机制不会主动清理这些 Key [3][5]。",
+     "ranks": [
+      3,
+      5
+     ]
+    }
+   ]
+  },
+  {
+   "question_id": "R8",
+   "category": "R",
+   "text": "LangChain 里怎么让模型边生成边出结果？有一批输入想一次跑完用什么方法？",
+   "expected_source": "大模型应用/知识条目/invoke、stream 与 batch.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "根据提供的知识库片段，针对您的问题回答如下：\n\n**1. 如何边生成边出结果**\n在 LangChain 中，可以使用 **`stream`（流式调用）** 方法来实现边生成边出结果 [1]。\n*   该方法适用于需要逐字或逐块输出内容的场景，例如聊天打字机效果 [1]。\n*   调用后会返回一个迭代器，每次产出包含增量文本的 `AIMessageChunk` 对象，开发者可以边生成边向用户展示 [1]。\n*   其调用示例为：`for chunk in model.stream(messages): print(chunk.text, end=\"\")` [1]。\n\n**2. 一批输入一次跑完的方法**\n若要一次处理一批输入，应使用 **`batch`（批量调用）** 方法 [1]。\n*   该方法允许一次性传入多条独立的输入消息列表，模型会对这些请求进行并行或批量处理 [1]。\n*   它适用于离线处理、评测或大规模数据生成等场景，能有效提高吞吐量 [1]。\n*   其调用示例为：`responses = model.batch([messages1, messages2, messages3])` [1]。\n\n此外，片段指出 `invoke`、`stream` 和 `batch` 是 LangChain 1.0 中聊天模型交互的三种标准调用方法 [2]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 115,
+     "source": "大模型应用/知识条目/invoke、stream 与 batch.md",
+     "seq": 3,
+     "score": 0.633183
+    },
+    {
+     "rank": 2,
+     "chunk_id": 114,
+     "source": "大模型应用/知识条目/invoke、stream 与 batch.md",
+     "seq": 2,
+     "score": 0.636892
+    },
+    {
+     "rank": 3,
+     "chunk_id": 75,
+     "source": "大模型应用/LangChain 1.0/核心组件/Agent/create_agent 与 Agent 输入输出.md",
+     "seq": 1,
+     "score": 0.601506
+    },
+    {
+     "rank": 4,
+     "chunk_id": 144,
+     "source": "大模型应用/知识条目/Runnable 协议.md",
+     "seq": 3,
+     "score": 0.599184
+    },
+    {
+     "rank": 5,
+     "chunk_id": 124,
+     "source": "大模型应用/知识条目/KV Cache.md",
+     "seq": 9,
+     "score": 0.562723
+    }
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    2
+   ],
+   "cited_sources": [
+    "大模型应用/知识条目/invoke、stream 与 batch.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 6208.767599979183,
+   "total_ms": 12053.576299978886,
+   "stage_ms": {
+    "vector": 15.939900011289865,
+    "embedding": 955.8905999874696,
+    "judge": 2873.9548999874387,
+    "generate": 8205.064800014952
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 2234,
+   "sentences": 9,
+   "uncited_sentences": 0,
+   "supported": 8,
+   "unsupported": 1,
+   "support_invalid": 0,
+   "support_calls": 9,
+   "unsupported_sentences": [
+    {
+     "sentence": "若要一次处理一批输入，应使用 **`batch`（批量调用）** 方法 [1]。",
+     "ranks": [
+      1
+     ]
+    }
+   ]
+  }
+ ],
+ "summary": {
+  "categories": {
+   "Q": {
+    "total": 22,
+    "decisions": {
+     "SUFFICIENT": 16,
+     "PARTIAL": 6
+    },
+    "statuses": {
+     "ANSWERED": 16,
+     "PARTIAL": 6
+    },
+    "expected_decisions": 22,
+    "failures": 0
+   },
+   "R": {
+    "total": 8,
+    "decisions": {
+     "PARTIAL": 3,
+     "SUFFICIENT": 5
+    },
+    "statuses": {
+     "PARTIAL": 3,
+     "ANSWERED": 5
+    },
+    "expected_decisions": 8,
+    "failures": 0
+   },
+   "N": {
+    "total": 10,
+    "decisions": {
+     "NONE": 10
+    },
+    "statuses": {
+     "REFUSED": 10
+    },
+    "expected_decisions": 10,
+    "failures": 0
+   },
+   "P": {
+    "total": 2,
+    "decisions": {
+     "PARTIAL": 1,
+     "SUFFICIENT": 1
+    },
+    "statuses": {
+     "PARTIAL": 1,
+     "ANSWERED": 1
+    },
+    "expected_decisions": 1,
+    "failures": 0
+   }
+  },
+  "sources": {
+   "scored": 30,
+   "expected_in_candidates": 30,
+   "answered_with_citations": 30,
+   "wrong_source": 0,
+   "wrong_source_ids": [],
+   "missing_expected_ids": []
+  },
+  "faithfulness": {
+   "checked_answers": 32,
+   "supported": 203,
+   "unsupported": 34,
+   "invalid": 0,
+   "support_rate": 0.8565400843881856,
+   "sentences": 295,
+   "uncited_sentences": 58,
+   "unsupported_ids": [
+    "Q3",
+    "Q4",
+    "Q7",
+    "Q11",
+    "Q12",
+    "Q14",
+    "Q15",
+    "P1",
+    "R3",
+    "R4",
+    "R5",
+    "R6",
+    "Q17",
+    "Q18",
+    "Q19",
+    "Q20",
+    "P2",
+    "R7",
+    "R8"
+   ]
+  },
+  "latency_ms": {
+   "first_text_median": 3505.246549990261,
+   "first_text_max": 70181.14890001016,
+   "total_median": 8927.32225000509,
+   "total_max": 193211.7834999808,
+   "refusal_total_median": 1899.9460999912117,
+   "stages_median": {
+    "embedding": 956.5734499919927,
+    "vector": 7.336549999308772,
+    "judge": 977.6076499983901,
+    "generate": 7779.823349992512
+   },
+   "generate_prompt_chars_median": 1881.0,
+   "answer_chars_median": 579.0
+  },
+  "calls": {
+   "question_calls": 79,
+   "support_calls": 237,
+   "retried_questions": 4,
+   "unavailable_after_retries": 0
+  }
+ },
+ "versions": {
+  "Python": "3.14.6",
+  "chromadb": "1.5.9",
+  "tokenizers": "0.23.2",
+  "langchain": "1.3.17",
+  "langchain-openai": "1.6.0"
+ },
+ "code_sha256": {
+  "retrieval.split_markdown": "489fe26f5016b1a107bc2a49ad756f4d7b53fe0f112cdd03b472f3e355f8e4cf",
+  "app/modules/qa/public.py": "47ed64d37c1cc7a280211d5223535006b33620934b93a3474e31bbb887a93b6f",
+  "scripts/eval_answers.py": "6867fb291592b8d3a7e6e3e4958c7a60620751748c023757bb76399423622940",
+  "scripts/eval_retrieval.py": "73c8519cc07deef5347c4c437e01d0fb2f986c40086ea1e04c9adf4c4cf51cfb"
+ },
+ "command": ".\\.venv\\Scripts\\python.exe -m scripts.eval_answers `\n  --golden-set '../docs/eval/golden-set-v1.md' '../docs/eval/golden-set-v2-heldout.md' `\n  --tokenizer 'data/tokenizers/bge-m3-5617a9f61b028005a4858fdac845db406aefb181.json' `\n  --model 'bge-m3' `\n  --dimensions 1024 `\n  --top-k 5 `\n  --strategy hybrid `\n  --faithfulness `\n  --pause 1.0 --cooldown 15.0 --max-attempts 3 `\n  --output '../docs/eval/answers-hybrid-2026-09-22.md'"
+}
