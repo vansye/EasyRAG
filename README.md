@@ -146,6 +146,18 @@ cd rag-service
 
 集成测试只创建并删除 `easyrag_fastapi_it_<随机UUID>`，不选择业务数据库；使用临时 Chroma、tokenizer 和本地 HTTP 模型服务，不需要真实模型或付费请求。数据库初始化、旧库接管与升级、事务、UTF-8 偏移、历史快照、索引恢复、HTTP 与维护子进程均有覆盖。CI 在 Linux 上运行同一批测试，并保留 Vue 测试与构建。
 
+问答质量用两个脚本度量，都只用 `sample-knowledge/` 与 `docs/eval/` 的黄金集在临时目录建隔离索引，不碰业务数据：
+
+```powershell
+cd rag-service
+# 离线召回（本地 embedding，不调回答模型）：hit@1/3/5/10
+.\.venv\Scripts\python.exe -m scripts.eval_retrieval --golden-set ../docs/eval/golden-set-v2-heldout.md --output ../docs/eval/retrieval-heldout.md
+# 在线问答（真实判定/生成模型，按 .env 或 config/llm.json 计费）：拒答正确率、错源率、引用支持率、首字与完整耗时
+.\.venv\Scripts\python.exe -m scripts.eval_answers --faithfulness --output ../docs/eval/answers.md
+```
+
+`eval_answers` 默认跑 v1 + v2 全部 42 题，`--only N,P` 或 `--only Q21,N8` 可只跑部分；`--faithfulness` 逐句核对引用是否被片段支持，会多出约一倍调用。报告与同名 JSON 记录本次样本数字与调用次数，口径见 [子 Issue D](docs/子Issue-D-离线评估.md)。
+
 ```powershell
 cd frontend
 npm test
