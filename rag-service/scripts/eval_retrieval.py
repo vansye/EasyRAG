@@ -2,6 +2,7 @@
 
 import argparse
 import hashlib
+import math
 import platform
 import re
 import sys
@@ -18,12 +19,14 @@ from chromadb.config import Settings as ChromaSettings
 import httpx
 from tokenizers import Tokenizer
 
-from app.modules.retrieval.public import Chunk, split_markdown, splitter_fingerprint
+from app.modules.retrieval.public import Chunk, LexicalIndex, fuse_rankings, split_markdown, splitter_fingerprint
 
 
 K_VALUES = (1, 3, 5, 10)
 RETRIEVAL_LIMIT = max(K_VALUES)
 DETAIL_TOP_K = 5
+STRATEGIES = ("dense", "bm25", "hybrid")
+DEFAULT_CANDIDATES = 20
 SERVICE_DIR = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = SERVICE_DIR.parent
 TOKENIZER_REVISION = "5617a9f61b028005a4858fdac845db406aefb181"
@@ -165,17 +168,40 @@ def embed_texts(
     return vectors
 
 
+def _cosine_distance(left: list[float], right: list[float]) -> float:
+    dot = sum(a * b for a, b in zip(left, right, strict=True))
+    norms = math.sqrt(sum(a * a for a in left)) * math.sqrt(sum(b * b for b in right))
+    return 1.0 - (dot / norms if norms else 0.0)
+
+
 def retrieve_chunks(
     records: list[IndexedChunk],
     document_vectors: list[list[float]],
     questions: list[Question],
     query_vectors: list[list[float]],
+    *,
+    strategy: str = "dense",
+    candidates: int = DEFAULT_CANDIDATES,
 ) -> dict[str, list[dict]]:
+    """Rank chunks per question with the same lexical/fusion code the service uses (B-17).
+
+    dense: the vector ranking alone. bm25: BM25 over embedding_text alone. hybrid: reciprocal rank
+    fusion of the top `candidates` of both. Every hit reports its cosine distance whichever channel found it.
+    """
+    if strategy not in STRATEGIES:
+        raise ValueError(f"unknown strategy: {strategy}")
+    if candidates <= 0:
+        raise ValueError("candidates must be positive")
     client = chromadb.EphemeralClient(settings=ChromaSettings(anonymized_telemetry=False))
     collection = client.create_collection(
         name=f"baseline-{uuid4().hex}", embedding_function=None,
         metadata={"hnsw:space": "cosine"},
     )
+    lexical = None
+    if strategy != "dense":
+        lexical = LexicalIndex.from_texts({record.identifier: record.chunk.embedding_text for record in records})
+    by_identifier = {record.identifier: (record, vector) for record, vector in zip(records, document_vectors, strict=True)}
+    depth = min(max(RETRIEVAL_LIMIT, candidates) if strategy == "hybrid" else RETRIEVAL_LIMIT, len(records))
     try:
         collection.add(
             ids=[record.identifier for record in records], embeddings=document_vectors,
@@ -184,11 +210,19 @@ def retrieve_chunks(
         )
         rankings = {}
         for question, vector in zip(questions, query_vectors, strict=True):
-            result = collection.query(query_embeddings=[vector], n_results=min(RETRIEVAL_LIMIT, len(records)),
-                                      include=["metadatas", "distances"])
+            result = collection.query(query_embeddings=[vector], n_results=depth, include=["distances"])
+            distances = dict(zip(result["ids"][0], (float(distance) for distance in result["distances"][0])))
+            dense_order = list(distances)
+            if strategy == "dense":
+                order = dense_order[:RETRIEVAL_LIMIT]
+            elif strategy == "bm25":
+                order = lexical.rank(question.text, RETRIEVAL_LIMIT)
+            else:
+                order = fuse_rankings([dense_order[:candidates], lexical.rank(question.text, candidates)])[:RETRIEVAL_LIMIT]
             rankings[question.question_id] = [
-                {**metadata, "distance": float(distance)}
-                for metadata, distance in zip(result["metadatas"][0], result["distances"][0], strict=True)
+                {**by_identifier[identifier][0].metadata,
+                 "distance": distances.get(identifier, _cosine_distance(vector, by_identifier[identifier][1]))}
+                for identifier in order
             ]
         return rankings
     finally:
@@ -215,12 +249,19 @@ def _quote(value: object) -> str:
 def render_report(report: dict) -> str:
     parameters = report["parameters"]
     statistics = report["chunk_statistics"]
+    strategy_notes = {
+        "dense": "检索策略：dense——只用向量排序。",
+        "bm25": "检索策略：bm25——只用 BM25（jieba 分词，语料为正文 + 标题路径）排序，相似度列仍报向量余弦。",
+        "hybrid": f"检索策略：hybrid——向量与 BM25 各取前 {parameters['candidates']} 个候选做倒数排名融合（RRF，k=60），"
+                  "与服务端 B-17 共用同一套函数；相似度列为向量余弦，只决定展示，不决定排序。",
+    }
     lines = [
         "# 离线召回验收报告（子 Issue B）", "",
         f"> 运行时间：{report['generated_at']}。由离线 CLI 生成，未调用 LLM。", "",
         "## 验收边界", "",
-        "本报告只验证切片与向量索引的离线召回；资料收录、更新同步、业务问答与完整评估平台需各自的验收证据。",
-        "不实现 Agent、改写、BM25、重排、拒答或部分覆盖判断；不读取 MySQL，不打开业务持久化 Chroma。", "",
+        "本报告只验证切片与索引的离线召回；资料收录、更新同步、业务问答与完整评估平台需各自的验收证据。",
+        "不实现 Agent、改写、重排、拒答或部分覆盖判断；不读取 MySQL，不打开业务持久化 Chroma。",
+        strategy_notes[parameters["strategy"]], "",
         "## 召回结果", "",
         "| 类别 | " + " | ".join(f"hit@{k}" for k in K_VALUES) + " |",
         "|---|" + "---:|" * len(K_VALUES),
@@ -261,6 +302,7 @@ def render_report(report: dict) -> str:
         "- 短片段在不超上限时与相邻片段合并，跨节保留共同标题路径；原文中的标题仍保留。下限是合并目标，不是硬约束。",
         "- `byte_start/byte_end` 为原文 UTF-8 字节偏移（左闭右开）；正文不规范化换行。HTTP 定位契约由独立的资料管理与接口测试验证。",
         "- 索引：独立 Chroma 内存 collection，cosine 距离，检索后只删除本次 collection；无阈值过滤。",
+        f"- 策略：{parameters['strategy']}；hybrid 候选深度：{parameters['candidates']}。",
         f"- 语料：{len(report['manifest'])} 篇、{sum(document['bytes'] for document in report['manifest'])} 字节；{statistics['count']} 个 chunk。",
         f"- 实际 chunk token 范围：{statistics['minimum']}–{statistics['maximum']}；低于软下限：{statistics['below_minimum']} 个。",
         f"- 文档 embedding 输入合计 {statistics['document_tokens']} token；全部查询合计 {statistics['query_tokens']} token。",
@@ -323,10 +365,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--min-tokens", type=int, default=64)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--timeout-seconds", type=float, default=180)
+    parser.add_argument("--strategy", choices=STRATEGIES, default="dense")
+    parser.add_argument("--candidates", type=int, default=DEFAULT_CANDIDATES,
+                        help="hybrid 时每个通道参与融合的候选数")
     parser.add_argument("--output", type=Path)
     arguments = parser.parse_args(argv)
     if arguments.batch_size <= 0 or arguments.dimensions <= 0 or arguments.timeout_seconds <= 0:
         parser.error("batch-size, dimensions and timeout-seconds must be positive")
+    if arguments.candidates <= 0:
+        parser.error("candidates must be positive")
     if not arguments.tokenizer.is_file():
         parser.error(f"tokenizer file missing; default tokenizer download: {TOKENIZER_URL}")
 
@@ -371,7 +418,8 @@ def main(argv: list[str] | None = None) -> int:
         )
         timings["问题 embedding"] = perf_counter() - stage_started
     stage_started = perf_counter()
-    rankings = retrieve_chunks(records, document_vectors, questions, query_vectors)
+    rankings = retrieve_chunks(records, document_vectors, questions, query_vectors,
+                               strategy=arguments.strategy, candidates=arguments.candidates)
     timings["临时索引与检索"] = perf_counter() - stage_started
     timings["总计（不含 Python 导入和报告写入）"] = perf_counter() - started
     metrics = summarize(questions, rankings)

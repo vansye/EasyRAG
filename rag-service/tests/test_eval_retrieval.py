@@ -176,6 +176,58 @@ def test_cosine_retrieval_cleans_up_only_its_ephemeral_collection(monkeypatch):
         client.delete_collection(sentinel_name)
 
 
+def _lexical_fixture_records():
+    from app.modules.retrieval.public import Chunk
+    from scripts.eval_retrieval import IndexedChunk
+
+    texts = {
+        "redis-1.md": "Redis 持久化第一节：RDB 与 AOF 的数据丢失窗口。",
+        "redis-2.md": "Redis 持久化第二节：AOF 重写与刷盘策略。",
+        "os-buffer.md": "数据写入缓冲区即返回成功，断电易丢数据；fsync 强制立即落盘。",
+        "pinia.md": "Pinia 管理组件之间共享的状态。",
+    }
+    records = [IndexedChunk(source, 1, Chunk(text, "", 0, len(text.encode()), 1)) for source, text in texts.items()]
+    vectors = [[1.0, 0.0, 0.0], [0.9, 0.1, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0]]
+    return records, vectors
+
+
+@pytest.mark.parametrize("strategy,expected_first,worst_os_buffer_rank", [
+    ("dense", "redis-1.md", 4), ("bm25", "os-buffer.md", 1), ("hybrid", None, 2),
+])
+def test_strategies_share_the_service_lexical_channel_and_keep_cosine_distances(strategy, expected_first, worst_os_buffer_rank):
+    from scripts.eval_retrieval import Question, first_hit_rank, retrieve_chunks
+
+    records, vectors = _lexical_fixture_records()
+    question = Question("Q21", "断电后数据还是可能丢？怎么强制立即落盘？", "os-buffer.md")
+    rankings = retrieve_chunks(records, vectors, [question], [[1.0, 0.0, 0.0]], strategy=strategy, candidates=3)
+    hits = rankings["Q21"]
+    sources = [hit["source"] for hit in hits]
+    if expected_first is not None:
+        assert sources[0] == expected_first
+    rank = first_hit_rank(question, hits)
+    assert rank is not None and rank <= worst_os_buffer_rank
+    if strategy == "dense":
+        # both off-topic vectors are orthogonal to the question; the vector channel cannot tell them apart
+        assert rank >= 3
+    else:
+        assert "pinia.md" not in sources
+    os_buffer = hits[rank - 1]
+    # whichever channel found it, the reported distance is its cosine distance to the question vector
+    assert os_buffer["distance"] == pytest.approx(1.0)
+    assert len(sources) == len(set(sources))
+
+
+def test_retrieve_chunks_rejects_unknown_strategy_and_non_positive_candidates():
+    from scripts.eval_retrieval import Question, retrieve_chunks
+
+    records, vectors = _lexical_fixture_records()
+    question = Question("Q1", "问题", "pinia.md")
+    with pytest.raises(ValueError, match="strategy"):
+        retrieve_chunks(records, vectors, [question], [[0.0, 1.0, 0.0]], strategy="rerank")
+    with pytest.raises(ValueError, match="candidates"):
+        retrieve_chunks(records, vectors, [question], [[0.0, 1.0, 0.0]], strategy="hybrid", candidates=0)
+
+
 @pytest.fixture
 def evaluation_files(tmp_path):
     corpus = tmp_path / "corpus"
@@ -229,7 +281,7 @@ def test_cli_writes_report_using_real_index_and_explicit_unscored_categories(
     status = eval_retrieval.main([
         "--corpus", str(corpus), "--golden-set", str(golden), "--tokenizer", str(tokenizer),
         "--ollama-url", "http://ollama", "--dimensions", "2", "--min-tokens", "0",
-        "--output", str(report),
+        "--strategy", "hybrid", "--output", str(report),
     ])
 
     assert status == 0
@@ -239,6 +291,7 @@ def test_cli_writes_report_using_real_index_and_explicit_unscored_categories(
     assert f"| R | {curve_row} |" in contents
     assert f"| Q+R | " + " | ".join("2/2（100.00%）" for _ in range(4)) + " |" in contents
     assert "漏召回题（前 10 均未命中）：无。" in contents
+    assert "检索策略：hybrid" in contents and "--strategy 'hybrid'" in contents
     assert "### N1 · 未评分" in contents
     assert "### P1 · 未评分" in contents
     assert "model-fixture-digest" in contents

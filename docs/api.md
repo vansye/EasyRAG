@@ -120,7 +120,7 @@
 
 ## 问答
 
-`question` 必须是非空字符串，最多 2,000 个 Unicode 码点，保留原始问题文本。当前每次问题检索一次，默认 `top_k=5`；HTTP 不开放 `top_k` 或检索轮数参数。每个问题固定一个回答模型会话，配置变更从下一次问题生效。
+`question` 必须是非空字符串，最多 2,000 个 Unicode 码点，保留原始问题文本。当前每次问题检索一次，默认 `top_k=5`；HTTP 不开放 `top_k` 或检索轮数参数。检索默认为混合策略：向量与 BM25（同一份片段正文 + 标题路径）各取前 20 个候选做倒数排名融合，再截取 `top_k`；`trace.retrieved[].score` 仍是该片段与问题的向量余弦相似度，只用于展示，`rank` 才是融合后的顺序。`RETRIEVAL_STRATEGY=dense` 时退回纯向量排序。每个问题固定一个回答模型会话，配置变更从下一次问题生效。
 
 ```json
 {
@@ -256,7 +256,7 @@ HTTP 开始接收请求前，G 调用 F 的 `Models.prepare()` 加载 SDK 依赖
 
 ## 健康与运行门禁
 
-`GET /health` 的顶层 `status: "UP"` 只代表进程能响应。`db.status` 单独报告 MySQL/schema 状态；`retrieval` 包含整体 `status` 和 `chroma`、`embedding`、`tokenizer` 的分层状态。依赖 DOWN 时健康接口仍返回 `200`，不能只看 HTTP 状态。
+`GET /health` 的顶层 `status: "UP"` 只代表进程能响应。`db.status` 单独报告 MySQL/schema 状态；`retrieval` 包含整体 `status` 和 `chroma`、`embedding`、`tokenizer` 的分层状态，以及当前检索策略 `strategy`（`hybrid` 或 `dense`）。依赖 DOWN 时健康接口仍返回 `200`，不能只看 HTTP 状态。
 
 `GET /api/runtime` 示例：
 

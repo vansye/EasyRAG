@@ -28,7 +28,7 @@ A/B/C/F 互不引用。G 只调用各模块的 `public.py`，通过注入接口�
 - 历史：G 直接调用 A 查询或删除独立记录；不调用检索和回答模型，不把历史答案加入索引或后续提问上下文。
 - 更新/删除：变更许可覆盖撤旧向量和数据库变更，直到异步索引终态；无法确认一致时关闭问答，要求显式恢复。
 
-完整边界、设计取舍与迁移记录见 [模块设计](docs/fastapi-modules.md)、[架构设计](docs/架构设计.md)。基线仍为向量检索和一次检索后的三态判定；BM25、查询改写重查、URL 抓取属于后续范围。
+完整边界、设计取舍与迁移记录见 [模块设计](docs/fastapi-modules.md)、[架构设计](docs/架构设计.md)。检索默认为混合策略：向量与 BM25 各取前 20 个候选做倒数排名融合，词法索引由 Chroma 载荷派生、随每次写入重建（`RETRIEVAL_STRATEGY=dense` 可退回纯向量）；之后仍是一次检索后的三态判定。查询改写重查、URL 抓取属于后续范围。
 
 ## 目录
 
@@ -38,7 +38,7 @@ rag-service/app/http.py          HTTP 参数、响应与错误适配
 rag-service/app/application/     装配、业务编排、运行门禁、单执行器、恢复
 rag-service/app/modules/
   knowledge/                    MySQL、迁移、正文/哈希、切片、资料状态与问答历史
-  retrieval/                    切片、tokenizer、embedding、Chroma
+  retrieval/                    切片、tokenizer、embedding、Chroma、BM25 与融合
   qa/                           判定、生成、拒答、trace，注入检索和模型端口
   answer_models/                配置、凭据、厂商 SDK、单问题会话
 rag-service/app/maintenance.py   独占维护 CLI

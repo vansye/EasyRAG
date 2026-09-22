@@ -17,6 +17,7 @@ from ._embedding import IndexChunk, _positive_id, embed_texts as _embed_texts, p
 from ._index_store import (
     ChunkIdConflict, IndexEntry, IndexMetadataMismatch, IndexStore as _IndexStore, IndexWriteError, SearchHit,
 )
+from ._lexical import LexicalIndex, fuse_rankings, tokenize
 from ._settings import RetrievalSettings
 
 
@@ -24,8 +25,8 @@ ChunkDraft = Chunk
 
 __all__ = [
     "Chunk", "ChunkDraft", "ChunkIdConflict", "IndexChunk", "IndexEntry", "IndexMetadataMismatch",
-    "IndexWriteError", "Retrieval", "RetrievalSettings", "RetrievalUnavailable", "SearchHit", "index_representatives",
-    "split_markdown", "splitter_fingerprint",
+    "IndexWriteError", "LexicalIndex", "Retrieval", "RetrievalSettings", "RetrievalUnavailable", "SearchHit",
+    "fuse_rankings", "index_representatives", "split_markdown", "splitter_fingerprint", "tokenize",
 ]
 
 
@@ -182,7 +183,10 @@ class Retrieval:
             vectors = self._embed([query])
         with _measure("vector", record_timing):
             try:
-                return index.query(vectors[0], top_k=top_k)
+                return index.query(
+                    vectors[0], top_k=top_k,
+                    lexical_query=query if self._settings.retrieval_strategy == "hybrid" else None,
+                )
             except Exception as exc:
                 raise RetrievalUnavailable("index", type(exc).__name__) from None
 
@@ -214,7 +218,8 @@ class Retrieval:
             chroma = {"status": "DOWN", "error": error}
         else:
             chroma = self._index.probe()
-        return {"status": chroma["status"], "embedding": embedding, "chroma": chroma}
+        return {"status": chroma["status"], "embedding": embedding, "chroma": chroma,
+                "strategy": settings.retrieval_strategy if settings else None}
 
     def health(self) -> dict:
         result = self.runtime_info()

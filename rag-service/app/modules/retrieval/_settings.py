@@ -36,6 +36,9 @@ class RetrievalSettings(BaseSettings):
     )
     embed_batch_size: int = Field(default=64, ge=1)
     chroma_dir: Path = DATA_DIR / "chroma"
+    # "hybrid" fuses BM25 over the same payload with the vector ranking (B-17); "dense" is the vector ranking alone.
+    retrieval_strategy: Literal["dense", "hybrid"] = "hybrid"
+    retrieval_candidates: int = Field(default=20, ge=1)
 
     @field_validator("chunk_tokenizer_path", "chroma_dir")
     @classmethod
