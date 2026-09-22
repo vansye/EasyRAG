@@ -55,6 +55,18 @@ def test_one_session_and_trace_rank_resolve_to_the_correct_source(workflow):
     assert w.gate.state == State.READY
 
 
+def test_relevant_subset_resolves_only_selected_sources_but_keeps_citation_rank(workflow):
+    w=workflow
+    w.session.complete.side_effect=['{"verdict":"SUFFICIENT","relevant":[2]}','Second only [2].']
+    w.a.sources.return_value=(Source(10,1,'Second note','Second',0,6,''),)
+    result=w.questions.ask('Question?')
+    w.a.sources.assert_called_once_with((10,))
+    assert [source.chunk_id for source in result.sources] == [10]
+    assert result.trace[-1].relevant == (2,) and [hit.rank for hit in result.trace[-1].retrieved] == [1,2]
+    saved=w.a.save_history.call_args.args[0]
+    assert saved.trace[-1]['relevant'] == [2] or saved.trace[-1]['relevant'] == (2,)
+
+
 def test_refusal_has_trace_but_does_not_read_sources_or_generate(workflow):
     w=workflow
     w.session.complete.side_effect=['{"verdict":"NONE"}']

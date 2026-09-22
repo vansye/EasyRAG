@@ -75,6 +75,8 @@ class QaTraceEntry:
     query: str
     retrieved: tuple[TraceHit, ...]
     decision: JudgeVerdict
+    # Ranks the judge named as supporting its decision; generation and citations see only these.
+    relevant: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,26 +126,37 @@ def _complete(
     return content
 
 
-def _parse_verdict(response: str) -> JudgeVerdict:
+def _parse_judgement(response: str, evidence_count: int) -> tuple[JudgeVerdict, tuple[int, ...] | None]:
+    """Return the verdict and, when the judge named them, the ranks that support it.
+
+    A missing `relevant` keeps every candidate (the pre-C-6 contract); a present but malformed one
+    is a wrong instruction from the model and fails like a bad verdict.
+    """
     match = _VERDICT_PATTERN.search(response)
     if match is None:
         raise QaError("judge", "INVALID_JUDGE_OUTPUT")
     try:
-        verdict = json.loads(match.group(0))["verdict"]
-    except (ValueError, KeyError):
+        payload = json.loads(match.group(0))
+        verdict = payload["verdict"]
+    except (ValueError, KeyError, TypeError):
         raise QaError("judge", "INVALID_JUDGE_OUTPUT") from None
     if verdict not in ("SUFFICIENT", "PARTIAL", "NONE"):
         raise QaError("judge", "INVALID_JUDGE_OUTPUT")
-    return cast(JudgeVerdict, verdict)
+    if verdict == "NONE" or "relevant" not in payload:
+        return cast(JudgeVerdict, verdict), None
+    ranks = payload["relevant"]
+    if not isinstance(ranks, list) or not ranks or any(
+        type(rank) is not int or not 1 <= rank <= evidence_count for rank in ranks
+    ):
+        raise QaError("judge", "INVALID_JUDGE_OUTPUT")
+    return cast(JudgeVerdict, verdict), tuple(dict.fromkeys(ranks))
 
 
-def _numbered(evidence: tuple[Evidence, ...]) -> str:
-    return "\n\n".join(
-        f"[{rank}] {chunk.text}" for rank, chunk in enumerate(evidence, start=1)
-    )
+def _numbered(evidence: tuple[tuple[int, Evidence], ...]) -> str:
+    return "\n\n".join(f"[{rank}] {chunk.text}" for rank, chunk in evidence)
 
 
-def _judge_prompt(question: str, evidence: tuple[Evidence, ...]) -> str:
+def _judge_prompt(question: str, evidence: tuple[tuple[int, Evidence], ...]) -> str:
     numbered = _numbered(evidence)
     return (
         "你是知识库问答的判定器。根据下面的检索片段判断：仅凭这些内容，"
@@ -153,11 +166,13 @@ def _judge_prompt(question: str, evidence: tuple[Evidence, ...]) -> str:
         "- SUFFICIENT：片段中有与问题主题直接相关的内容，且足以支撑完整回答\n"
         "- PARTIAL：有直接相关内容，但只覆盖问题的一部分，缺失的是问题主体而非边角\n"
         "- NONE：没有与问题主题直接相关的片段（词面相似不算直接相关）\n\n"
-        '只输出 JSON：{"verdict": "SUFFICIENT"}（三选一），不要输出其他内容。'
+        "同时列出与问题主题直接相关、支撑该判定的片段编号 relevant：回答时只能看到并引用这些片段，"
+        "漏掉的片段无法再被引用；SUFFICIENT / PARTIAL 至少列一个，NONE 为空数组。\n"
+        '只输出 JSON：{"verdict": "SUFFICIENT", "relevant": [1, 3]}（verdict 三选一），不要输出其他内容。'
     )
 
 
-def _generate_prompt(question: str, evidence: tuple[Evidence, ...], *, partial: bool) -> str:
+def _generate_prompt(question: str, evidence: tuple[tuple[int, Evidence], ...], *, partial: bool) -> str:
     numbered = _numbered(evidence)
     boundary = ""
     if partial:
@@ -168,7 +183,7 @@ def _generate_prompt(question: str, evidence: tuple[Evidence, ...], *, partial: 
     return (
         "根据下面的知识库片段回答问题。要求：\n"
         "1. 只使用片段中出现的信息，不得编造或补充片段之外的知识\n"
-        "2. 每个事实性结论后用 [n] 标注来源片段编号\n\n"
+        "2. 每个事实性结论后用 [n] 标注来源片段编号，编号只能取片段前标注的编号\n\n"
         f"问题：{question}\n\n片段：\n{numbered}{boundary}"
     )
 
@@ -183,6 +198,7 @@ class Qa:
         *, record_timing: Callable[[str, float], None] | None = None,
         cancelled: Callable[[], bool] = lambda: False,
     ):
+        """Retrieve, judge, and return the numbered evidence the answer may see (a subset when the judge named it)."""
         validate_question(question)
         if type(top_k) is not int or top_k <= 0:
             raise ValueError("top_k must be positive")
@@ -192,26 +208,29 @@ class Qa:
         except Exception as exc:
             raise QaError("search", type(exc).__name__) from None
         _check_cancelled(cancelled)
-        verdict = _parse_verdict(_complete(
-            chat, _judge_prompt(question, evidence), "judge", record_timing,
-        )) if evidence else "NONE"
+        numbered = tuple(enumerate(evidence, start=1))
+        verdict, relevant = _parse_judgement(_complete(
+            chat, _judge_prompt(question, numbered), "judge", record_timing,
+        ), len(evidence)) if evidence else ("NONE", None)
         _check_cancelled(cancelled)
+        selected = tuple(pair for pair in numbered if pair[0] in relevant) if relevant else numbered
         trace = (QaTraceEntry(
             round_index=1,
             query=question,
             retrieved=tuple(
                 TraceHit(chunk.chunk_id, chunk.document_id, chunk.score, rank)
-                for rank, chunk in enumerate(evidence, start=1)
+                for rank, chunk in numbered
             ),
             decision=verdict,
+            relevant=tuple(rank for rank, _chunk in selected) if verdict != "NONE" else (),
         ),)
-        return evidence, verdict, trace
+        return selected, verdict, trace
 
     def answer(
         self, question: str, search: SearchPort, chat: ChatPort, top_k: int = 5,
         *, record_timing: Callable[[str, float], None] | None = None,
     ) -> AnswerDraft:
-        evidence, verdict, trace = self._prepare(
+        selected, verdict, trace = self._prepare(
             question, search, chat, top_k, record_timing=record_timing,
         )
         if verdict == "NONE":
@@ -219,15 +238,15 @@ class Qa:
                 answer=_REFUSAL_ANSWER, status="REFUSED", chunk_ids=(), trace=trace,
             )
         answer = _complete(
-            chat, _generate_prompt(question, evidence, partial=(verdict == "PARTIAL")), "generate",
+            chat, _generate_prompt(question, selected, partial=(verdict == "PARTIAL")), "generate",
             record_timing,
         )
-        if not citations_are_valid(answer, len(evidence)):
+        if not citations_are_valid(answer, {rank for rank, _chunk in selected}):
             raise QaError("generate", "INVALID_CITATIONS")
         return AnswerDraft(
             answer=answer,
             status="ANSWERED" if verdict == "SUFFICIENT" else "PARTIAL",
-            chunk_ids=tuple(sorted({chunk.chunk_id for chunk in evidence})),
+            chunk_ids=tuple(sorted({chunk.chunk_id for _rank, chunk in selected})),
             trace=trace,
         )
 
@@ -236,19 +255,19 @@ class Qa:
         *, record_timing: Callable[[str, float], None] | None = None,
         cancelled: Callable[[], bool] = lambda: False,
     ) -> Generator[QaStreamEvent, None, None]:
-        evidence, verdict, trace = self._prepare(
+        selected, verdict, trace = self._prepare(
             question, search, chat, top_k, record_timing=record_timing, cancelled=cancelled,
         )
         if verdict == 'NONE':
             yield QaStreamEvent('done', draft=AnswerDraft(_REFUSAL_ANSWER, 'REFUSED', (), trace))
             return
-        chunk_ids = tuple(sorted({chunk.chunk_id for chunk in evidence}))
+        chunk_ids = tuple(sorted({chunk.chunk_id for _rank, chunk in selected}))
         yield QaStreamEvent('sources', chunk_ids=chunk_ids, trace=trace)
         _check_cancelled(cancelled)
         started = perf_counter()
         parts = []
         try:
-            with closing(chat.stream(_generate_prompt(question, evidence, partial=verdict == 'PARTIAL'))) as chunks:
+            with closing(chat.stream(_generate_prompt(question, selected, partial=verdict == 'PARTIAL'))) as chunks:
                 while True:
                     _check_cancelled(cancelled)
                     try:
@@ -272,7 +291,7 @@ class Qa:
         answer = ''.join(parts)
         if not answer.strip():
             raise QaError('generate', 'EMPTY_OR_NON_TEXT_CONTENT')
-        if not citations_are_valid(answer, len(evidence)):
+        if not citations_are_valid(answer, {rank for rank, _chunk in selected}):
             raise QaError('generate', 'INVALID_CITATIONS')
         yield QaStreamEvent('done', draft=AnswerDraft(
             answer, 'ANSWERED' if verdict == 'SUFFICIENT' else 'PARTIAL', chunk_ids, trace,

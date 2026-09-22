@@ -1,7 +1,7 @@
 """Validate the numbered references that the Markdown answer presents as prose."""
 
 import re
-from collections.abc import Iterator
+from collections.abc import Collection, Iterator
 
 from markdown_it import MarkdownIt
 from markdown_it.rules_inline import StateInline
@@ -94,7 +94,12 @@ def _prose(markdown: str) -> Iterator[str]:
             yield "".join(parts)
 
 
-def citations_are_valid(markdown: str, evidence_count: int) -> bool:
+def citations_are_valid(markdown: str, allowed: int | Collection[int]) -> bool:
+    """At least one prose citation, and every cited number (ranges expanded) is an allowed rank.
+
+    `allowed` is either the candidate count k (ranks 1..k) or the exact ranks the answer was shown.
+    """
+    permitted = frozenset(range(1, allowed + 1)) if isinstance(allowed, int) else frozenset(allowed)
     found = False
     for text in _prose(markdown):
         for match in _REFERENCE.finditer(text):
@@ -108,6 +113,6 @@ def citations_are_valid(markdown: str, evidence_count: int) -> bool:
                     start, end = int(bounds[0]), int(bounds[-1])
                 except ValueError:
                     return False
-                if not 1 <= start <= end <= evidence_count:
+                if start > end or not permitted.issuperset(range(start, end + 1)):
                     return False
     return found
