@@ -55,13 +55,15 @@ _JUDGE_PROMPT = (
     "- SUFFICIENT：片段中有与问题主题直接相关的内容，且足以支撑完整回答\n"
     "- PARTIAL：有直接相关内容，但只覆盖问题的一部分，缺失的是问题主体而非边角\n"
     "- NONE：没有与问题主题直接相关的片段（词面相似不算直接相关）\n\n"
-    '只输出 JSON：{"verdict": "SUFFICIENT"}（三选一），不要输出其他内容。'
+    "同时列出与问题主题直接相关、支撑该判定的片段编号 relevant：回答时只能看到并引用这些片段，"
+    "漏掉的片段无法再被引用；SUFFICIENT / PARTIAL 至少列一个，NONE 为空数组。\n"
+    '只输出 JSON：{"verdict": "SUFFICIENT", "relevant": [1, 3]}（verdict 三选一），不要输出其他内容。'
 )
 
 _GENERATE_PROMPT = (
     "根据下面的知识库片段回答问题。要求：\n"
     "1. 只使用片段中出现的信息，不得编造或补充片段之外的知识\n"
-    "2. 每个事实性结论后用 [n] 标注来源片段编号\n\n"
+    "2. 每个事实性结论后用 [n] 标注来源片段编号，编号只能取片段前标注的编号\n\n"
     "问题：Redis 有哪些特点？\n\n片段：\n"
     "[1] Redis 保留内存中的数据。\n\n"
     "[2] Redis 支持持久化。\n\n"
@@ -93,8 +95,51 @@ def test_sufficient_preserves_prompts_and_rank_to_chunk_mapping():
                 {"chunk_id": 303, "document_id": 12, "score": 0.48, "rank": 3},
             ],
             "decision": "SUFFICIENT",
+            "relevant": [1, 2, 3],
         }],
     }
+
+
+def test_relevant_subset_keeps_original_numbering_and_restricts_generation_and_citations():
+    search = _FixedSearch(_evidence())
+    chat = _ScriptedChat('{"verdict": "SUFFICIENT", "relevant": [3, 1, 3]}', "内存数据 [1]，多种结构 [3]。")
+
+    draft = qa.Qa().answer("Redis 有哪些特点？", search, chat, top_k=3)
+
+    generate_prompt = chat.prompts[1]
+    assert "[1] Redis 保留内存中的数据。\n\n[3] Redis 支持多种数据结构。" in generate_prompt
+    assert "[2] Redis 支持持久化。" not in generate_prompt
+    assert draft.chunk_ids == (303,)
+    # the judge listed [3, 1, 3]; selection keeps candidate order and drops the duplicate
+    assert draft.trace[0].relevant == (1, 3)
+    assert [hit.rank for hit in draft.trace[0].retrieved] == [1, 2, 3]
+
+    chat = _ScriptedChat('{"verdict": "SUFFICIENT", "relevant": [1]}', "持久化 [2]。")
+    with pytest.raises(qa.QaError) as failure:
+        qa.Qa().answer("Redis 有哪些特点？", search, chat, top_k=3)
+    assert (failure.value.stage, failure.value.cause) == ("generate", "INVALID_CITATIONS")
+
+
+@pytest.mark.parametrize("reply", [
+    '{"verdict": "SUFFICIENT", "relevant": []}',
+    '{"verdict": "PARTIAL", "relevant": [0]}',
+    '{"verdict": "SUFFICIENT", "relevant": [4]}',
+    '{"verdict": "SUFFICIENT", "relevant": ["1"]}',
+    '{"verdict": "SUFFICIENT", "relevant": [true]}',
+    '{"verdict": "SUFFICIENT", "relevant": 2}',
+])
+def test_malformed_relevant_is_an_invalid_judgement_and_never_generates(reply):
+    chat = _ScriptedChat(reply, "never generated [1]")
+    with pytest.raises(qa.QaError) as failure:
+        qa.Qa().answer("Redis 有哪些特点？", _FixedSearch(_evidence()), chat, top_k=3)
+    assert (failure.value.stage, failure.value.cause) == ("judge", "INVALID_JUDGE_OUTPUT")
+    assert len(chat.prompts) == 1
+
+
+def test_none_ignores_relevant_and_records_no_selection():
+    chat = _ScriptedChat('{"verdict": "NONE", "relevant": [1, 2]}')
+    draft = qa.Qa().answer("Redis 有哪些特点？", _FixedSearch(_evidence()), chat)
+    assert draft.status == "REFUSED" and draft.trace[0].relevant == () and len(chat.prompts) == 1
 
 
 def test_partial_keeps_one_search_and_the_original_boundary_instruction():

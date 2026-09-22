@@ -63,4 +63,14 @@ describe('answer citations', () => {
     expect(view.citations).toEqual([])
     expect(view.segments).toEqual([{ type: 'text', text: payload.answer }])
   })
+
+  it('maps non-consecutive numbers to sources when the judge kept a subset of candidates', () => {
+    const payload = result('第二项 [2]，第三项 [3]，合并 [2-3]。')
+    payload.sources = [source(2), source(12)]
+    payload.trace[0]!.relevant = [2, 3]
+    const view = presentAnswer(payload)
+    expect(view.citations.map((citation) => [citation.number, citation.source.chunk_id])).toEqual([[2, 2], [3, 12]])
+    expect(view.segments.filter((segment) => segment.type === 'citation')).toHaveLength(4)
+    expect(view.retrievedCount).toBe(3)
+  })
 })

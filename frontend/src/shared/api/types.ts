@@ -94,6 +94,8 @@ export interface TraceEntry {
   query: string
   retrieved: RetrievedRef[]
   decision: 'SUFFICIENT' | 'PARTIAL' | 'NONE'
+  /** 判定器标为支撑判断的片段 rank；生成与出处只含这些片段。旧记录没有该字段。 */
+  relevant?: number[]
 }
 
 /** trace 是后端透传的 JSON（QuestionController.AnsweredQuestion.trace），

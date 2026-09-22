@@ -59,6 +59,7 @@ class QuestionResult:
     failure: str | None = None
     answer: str = ""
     candidates: list[dict] = field(default_factory=list)
+    relevant_ranks: list[int] = field(default_factory=list)
     expected_rank: int | None = None
     cited_ranks: list[int] = field(default_factory=list)
     cited_sources: list[str] = field(default_factory=list)
@@ -241,6 +242,7 @@ def evaluate_question(
         result.status = draft.status
     if trace:
         result.decision = trace[-1].decision
+        result.relevant_ranks = list(getattr(trace[-1], "relevant", ()))
         for hit in trace[-1].retrieved:
             chunk = chunks[hit.chunk_id]
             result.candidates.append({"rank": hit.rank, "chunk_id": hit.chunk_id, "source": chunk.indexed.source,
@@ -302,6 +304,19 @@ def summarize(results: list[QuestionResult]) -> dict:
         "unsupported_ids": [result.question_id for result in checked if result.unsupported],
     }
     generated = [result for result in results if result.first_text_ms is not None]
+    compressed = [result for result in results if result.decision in ("SUFFICIENT", "PARTIAL") and result.candidates]
+
+    def expected_dropped(result: QuestionResult) -> bool:
+        expected_ranks = {candidate["rank"] for candidate in result.candidates if candidate["source"] == result.expected_source}
+        return bool(expected_ranks and result.relevant_ranks) and expected_ranks.isdisjoint(result.relevant_ranks)
+
+    summary["evidence"] = {
+        "answers": len(compressed),
+        "candidates": sum(len(result.candidates) for result in compressed),
+        "relevant": sum(len(result.relevant_ranks) for result in compressed),
+        "subset_answers": sum(0 < len(result.relevant_ranks) < len(result.candidates) for result in compressed),
+        "expected_dropped_ids": [result.question_id for result in compressed if expected_dropped(result)],
+    }
     summary["latency_ms"] = {
         "first_text_median": _median([result.first_text_ms for result in generated]),
         "first_text_max": max((result.first_text_ms for result in generated), default=None),
@@ -337,6 +352,7 @@ def render_report(report: dict) -> str:
     parameters = report["parameters"]
     categories = summary["categories"]
     sources = summary["sources"]
+    evidence = summary["evidence"]
     faith = summary["faithfulness"]
     latency = summary["latency_ms"]
     lines = [
@@ -365,6 +381,12 @@ def render_report(report: dict) -> str:
         f"- 错源率（已作答且有引用的 Q/R 中，引用片段全部不属于标注出处）：{_format_rate(sources['wrong_source'], sources['answered_with_citations'])}；"
         f"错源题：{', '.join(sources['wrong_source_ids']) or '无'}。", "",
         "错源的答案引用合法、内容也可能没有编造，但答的不是用户资料里的那一篇；判定器与引用校验都抓不住它，只有检索层能防。", "",
+        "## 证据压缩", "",
+        f"- 作答的 {evidence['answers']} 题共 {evidence['candidates']} 个候选，判定器标为相关并送入生成的 {evidence['relevant']} 个"
+        f"（{evidence['relevant'] / evidence['candidates']:.1%}）；只送子集的答案 {evidence['subset_answers']} 题。"
+        if evidence["candidates"] else "- 本次没有作答的题，无压缩数据。",
+        f"- 标注出处进了候选却被判定器排除的题：{', '.join(evidence['expected_dropped_ids']) or '无'}。", "",
+        "判定器未输出 relevant 时按全部候选计，因此比例既含模型主动压缩也含未压缩。", "",
         "## 引用支持率", "",
     ]
     if parameters["faithfulness"]:

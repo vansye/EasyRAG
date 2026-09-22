@@ -86,3 +86,20 @@ def test_consumer_closes_nested_generator():
     next(stream)
     stream.close()
     assert calls[-1] == 'closed'
+
+
+def test_stream_sources_carry_only_the_relevant_subset_with_original_ranks():
+    evidence = tuple(qa.Evidence(30 + rank, rank, f'Evidence {rank}', '', .9) for rank in range(1, 4))
+    search = SimpleNamespace(search=lambda *a, **kw: evidence)
+    prompts = []
+    def complete(prompt):
+        return '{"verdict": "PARTIAL", "relevant": [2]}'
+    def stream(prompt):
+        prompts.append(prompt)
+        yield 'Second only [2].'
+    events = list(qa.Qa().stream('Question', search, SimpleNamespace(complete=complete, stream=stream)))
+    sources, final = events[0], events[-1]
+    assert sources.kind == 'sources' and sources.chunk_ids == (32,)
+    assert sources.trace[-1].relevant == (2,) and [hit.rank for hit in sources.trace[-1].retrieved] == [1, 2, 3]
+    assert '[2] Evidence 2' in prompts[0] and '[1] Evidence 1' not in prompts[0] and '[3] Evidence 3' not in prompts[0]
+    assert final.kind == 'done' and final.draft.chunk_ids == (32,) and final.draft.status == 'PARTIAL'

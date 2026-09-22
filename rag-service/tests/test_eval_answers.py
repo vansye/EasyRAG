@@ -162,6 +162,23 @@ def test_faithfulness_counts_supported_unsupported_invalid_and_uncited_sentences
     assert CHUNKS[2].indexed.chunk.text not in support_prompt
 
 
+def test_relevant_subset_is_recorded_and_summarised(monkeypatch):
+    session = _ScriptedSession('{"verdict": "SUFFICIENT", "relevant": [2]}', "ACID 有四个特性 [2]。")
+    result = evaluate_question(Qa(), Question("Q1", "什么是 ACID？", "a.md"), _FixedRetrieval(HITS), session, 5, CHUNKS,
+                               faithfulness=False)
+    assert result.relevant_ranks == [2] and result.cited_ranks == [2] and result.wrong_source is False
+    assert result.generate_prompt_chars == len(session.prompts[1][1]) and "Redis 事务不支持回滚" not in session.prompts[1][1]
+    dropped = QuestionResult("Q2", "Q", "q", "b.md", decision="PARTIAL", status="PARTIAL", expected_rank=1,
+                             relevant_ranks=[3], candidates=[{"rank": 1, "source": "b.md"}, {"rank": 2, "source": "b.md"},
+                                                             {"rank": 3, "source": "c.md"}])
+    kept = QuestionResult("Q3", "Q", "q", "b.md", decision="SUFFICIENT", status="ANSWERED", expected_rank=1,
+                          relevant_ranks=[2], candidates=[{"rank": 1, "source": "b.md"}, {"rank": 2, "source": "b.md"}])
+    summary = summarize([result, dropped, kept])
+    # Q3 dropped rank 1 but kept another chunk of the expected document, so only Q2 lost its source
+    assert summary["evidence"] == {"answers": 3, "candidates": 8, "relevant": 3, "subset_answers": 3,
+                                   "expected_dropped_ids": ["Q2"]}
+
+
 def test_summary_and_report_expose_rates_without_absolute_paths():
     answered = QuestionResult("Q1", "Q", "q", "a.md", decision="SUFFICIENT", status="ANSWERED", expected_rank=1,
                               cited_ranks=[1], cited_sources=["a.md"], wrong_source=False, first_text_ms=900.0,
@@ -183,6 +200,7 @@ def test_summary_and_report_expose_rates_without_absolute_paths():
     assert summary["faithfulness"]["support_rate"] == 0.75 and summary["faithfulness"]["unsupported_ids"] == ["Q2"]
     assert summary["latency_ms"]["first_text_median"] == 1050.0 and summary["latency_ms"]["refusal_total_median"] == 1500.0
     assert summary["calls"] == {"question_calls": 7, "support_calls": 4, "retried_questions": 0, "unavailable_after_retries": 0}
+    assert summary["evidence"] == {"answers": 0, "candidates": 0, "relevant": 0, "subset_answers": 0, "expected_dropped_ids": []}
     report = render_report({
         "generated_at": "2026-09-21T00:00:00+08:00",
         "parameters": {"llm_provider": "openai", "llm_model": "scripted", "retrieval_strategy": "dense",
