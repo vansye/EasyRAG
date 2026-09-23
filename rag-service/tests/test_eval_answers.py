@@ -146,14 +146,17 @@ def test_faithfulness_counts_supported_unsupported_invalid_and_uncited_sentences
 
     sleeps = []
     monkeypatch.setattr(eval_answers.time, "sleep", sleeps.append)
-    answer = "ACID 有四个特性 [2]。\n它们是原子性等 [2]。\n据说还有第五个特性 [2]。\n无引用的总结。"
+    answer = ("ACID 有四个特性 [2]。\n它们是原子性等 [2]。\n据说还有第五个特性 [2]。\n无引用的总结。\n"
+              "覆盖边界说明：库中只有这些内容 [2]。\n以上回答严格基于片段 [2]。")
     session = _ScriptedSession('{"verdict": "SUFFICIENT"}', answer,
                                '{"supported": true}', 'not json', RuntimeError("model down"), '{"supported": false}')
     result = evaluate_question(Qa(), Question("Q2", "ACID？", "a.md"), _FixedRetrieval(HITS), session, 5, CHUNKS,
                                faithfulness=True, pause=0.5, cooldown=3.0, max_attempts=2)
     assert (result.supported, result.unsupported, result.support_invalid) == (1, 1, 1)
     assert result.unsupported_sentences == [{"sentence": "据说还有第五个特性 [2]。", "ranks": [2]}]
-    assert result.support_calls == 3 and result.sentences == 4 and result.uncited_sentences == 1
+    # the two boundary / meta sentences cite a fragment but make no claim: counted, never sent to the judge
+    assert result.support_calls == 3 and result.meta_sentences == 2
+    assert result.sentences == 6 and result.uncited_sentences == 1
     assert result.wrong_source is False
     # pause before the first check, pause between checks, and one cooldown for the failed attempt
     assert sleeps == [0.5, 0.5, 0.5, 3.0]
