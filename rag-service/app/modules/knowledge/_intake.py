@@ -11,6 +11,7 @@ MAX_CONTENT_BYTES = 1024 * 1024
 JAVA_WHITESPACE = "\t\n\v\f\r\x1c\x1d\x1e\x1f \u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2008\u2009\u200a\u2028\u2029\u205f\u3000"
 FRONTMATTER = re.compile(r"\A---[ \t]*\r?\n(.*?)\r?\n---[ \t]*(?:\r?\n|\Z)", re.S)
 KEY_VALUE = re.compile(r"^([A-Za-z][A-Za-z0-9_-]*)[ \t]*:[ \t]*([^\n\r\x85\u2028\u2029]*)$")
+LIST_ITEM = re.compile(r"^-[ \t]+([^\n\r\x85\u2028\u2029]*)$")
 H1 = re.compile(r"(?:\A|(?<=[\n\r\x85\u2028\u2029])) {0,3}#[ \t]+([^\n\r\x85\u2028\u2029]*?)[ \t]*(?=[\n\r\x85\u2028\u2029]|\Z)")
 
 
@@ -54,12 +55,25 @@ def _tags(value: str) -> tuple[str, ...]:
     return tuple(tag for part in parts if (tag := java_strip(_unquote(java_strip(part)))))
 
 
+def _block_tags(lines: list[str]) -> tuple[str, ...]:
+    """YAML block sequence under `tags:`; the first line that is not an item ends it."""
+    tags = []
+    for line in lines:
+        item = LIST_ITEM.fullmatch(java_strip(line))
+        if item is None:
+            break
+        if tag := java_strip(_unquote(java_strip(item.group(1)))):
+            tags.append(tag)
+    return tuple(tags)
+
+
 def metadata(content: str, fallback: str) -> tuple[str, tuple[str, ...]]:
     block = FRONTMATTER.match(content)
     title, tags, body = None, (), content
     if block:
         body = content[block.end():]
-        for line in block.group(1).split("\n"):
+        lines = block.group(1).split("\n")
+        for index, line in enumerate(lines):
             entry = KEY_VALUE.fullmatch(java_strip(line))
             if entry is None:
                 continue
@@ -69,6 +83,8 @@ def metadata(content: str, fallback: str) -> tuple[str, tuple[str, ...]]:
                 title = _unquote(value)
             elif key == "tags" and value.startswith("[") and value.endswith("]"):
                 tags = _tags(value)
+            elif key == "tags" and not value:
+                tags = _block_tags(lines[index + 1:])
     if title is not None and java_strip(title):
         return java_strip(title)[:512], tags
     heading = H1.search(body)
