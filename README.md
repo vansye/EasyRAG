@@ -156,7 +156,9 @@ cd rag-service
 .\.venv\Scripts\python.exe -m scripts.eval_answers --faithfulness --output ../docs/eval/answers.md
 ```
 
-`eval_answers` 默认跑 v1 + v2 全部 42 题，`--only N,P` 或 `--only Q21,N8` 可只跑部分；`--faithfulness` 逐句核对引用是否被片段支持，会多出约一倍调用。报告与同名 JSON 记录本次样本数字与调用次数，口径见 [子 Issue D](docs/子Issue-D-离线评估.md)。
+`eval_answers` 默认跑 v1 + v2 全部 42 题，`--golden-set ../docs/eval/golden-set-v3-hard.md` 可换成难例集，`--only N,P` 或 `--only Q21,N8` 可只跑部分；`--faithfulness` 逐句核对引用是否被片段支持，会多出约一倍调用。报告与同名 JSON 记录本次样本数字与调用次数，口径见 [子 Issue D](docs/子Issue-D-离线评估.md)。
+
+真实使用里的失败问法是最好的难例来源。`python -m scripts.export_history_failures` 只读地把本机问答历史中状态为 REFUSED / PARTIAL 的记录导出为 `rag-service/data/` 下的 JSON 与标注表（问题、当时候选与判定，不含答案正文），由人工填写"期望出处"后再决定哪些进入黄金集；该目录被 Git 忽略，真实问法不入库。
 
 ```powershell
 cd frontend

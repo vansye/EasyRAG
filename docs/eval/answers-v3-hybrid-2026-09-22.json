@@ -1,0 +1,1734 @@
+{
+ "generated_at": "2026-09-22T23:00:59+08:00",
+ "parameters": {
+  "llm_provider": "openai",
+  "llm_model": "agnes-3.0-flash",
+  "retrieval_strategy": "hybrid",
+  "embedding_model": "bge-m3",
+  "embedding_dim": 1024,
+  "top_k": 5,
+  "faithfulness": true,
+  "only": null,
+  "pause": 1.0,
+  "cooldown": 15.0,
+  "max_attempts": 3,
+  "max_tokens": 512,
+  "min_tokens": 64,
+  "tokenizer_sha256": "21106b6d7dab2952c1d496fb21d5dc9db75c28ed361a05f5020bbba27810dd08"
+ },
+ "document_count": 29,
+ "chunk_count": 222,
+ "index_seconds": 41.0840474999859,
+ "corpus_sha256": "3d4b803355606400354a4b4f73f4fde54fc92e352f43ac80e1dd60ffda123425",
+ "golden_sha256": {
+  "golden-set-v3-hard.md": "75a3ac40bb9d23d52c33c92433ad266661f580f0fe57c7887d9fa350975b35c5"
+ },
+ "results": [
+  {
+   "question_id": "Q23",
+   "category": "Q",
+   "text": "redis-check-aof --fix 是干什么用的？什么时候会用到它？",
+   "expected_source": "数据库/Redis/Redis持久化.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "`redis-check-aof --fix` 用于检查并修复损坏的 AOF 文件，其过程为交互式修复，会提示将要截断的损坏部分（字节数），在用户确认后截断文件至最后一个正常命令的位置 [1][3]。\n\n使用场景包括：\n1. 当 AOF 文件损坏时，在恢复流程中作为可选步骤执行，修复后重新启动 Redis [1][3]。\n2. 作为恢复策略的一部分，当优先使用 AOF 恢复但发现文件损坏时，使用 `redis-check-aof --fix` 进行修复 [2]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 175,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 28,
+     "score": 0.656744
+    },
+    {
+     "rank": 2,
+     "chunk_id": 176,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 29,
+     "score": 0.61265
+    },
+    {
+     "rank": 3,
+     "chunk_id": 174,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 27,
+     "score": 0.602185
+    },
+    {
+     "rank": 4,
+     "chunk_id": 163,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 16,
+     "score": 0.62028
+    },
+    {
+     "rank": 5,
+     "chunk_id": 172,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 25,
+     "score": 0.601539
+    }
+   ],
+   "relevant_ranks": [
+    1,
+    2,
+    3
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    2,
+    3
+   ],
+   "cited_sources": [
+    "数据库/Redis/Redis持久化.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 2507.012299989583,
+   "total_ms": 4225.061599980108,
+   "stage_ms": {
+    "vector": 20.087999990209937,
+    "embedding": 718.5580999939702,
+    "judge": 1043.5679999936838,
+    "generate": 2437.472199992044
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 1280,
+   "sentences": 3,
+   "uncited_sentences": 0,
+   "supported": 3,
+   "unsupported": 0,
+   "support_invalid": 0,
+   "support_calls": 3,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "Q24",
+   "category": "Q",
+   "text": "Linux 里的 pdflush 线程负责什么？",
+   "expected_source": "数据库/知识条目/操作系统缓冲区（OS Buffer）.md",
+   "decision": "PARTIAL",
+   "status": "PARTIAL",
+   "failure": null,
+   "answer": "根据提供的知识库片段，Linux 里的 `pdflush` 线程属于内核后台线程，其负责定期将缓冲区中的脏页写入磁盘（即刷盘机制）[1]。\n\n**覆盖边界声明**：\n库中仅提供了 `pdflush` 线程在“刷盘机制”中定期将脏页写入磁盘这一相关描述，未覆盖该线程的其他具体职责或详细工作原理（如其与 writeback 策略的具体交互细节、启动条件等），故无法回答更多细节。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 219,
+     "source": "数据库/知识条目/操作系统缓冲区（OS Buffer）.md",
+     "seq": 3,
+     "score": 0.49475
+    },
+    {
+     "rank": 2,
+     "chunk_id": 206,
+     "source": "数据库/知识条目/epoll（Linux 高并发网络模型）.md",
+     "seq": 1,
+     "score": 0.477618
+    },
+    {
+     "rank": 3,
+     "chunk_id": 207,
+     "source": "数据库/知识条目/epoll（Linux 高并发网络模型）.md",
+     "seq": 2,
+     "score": 0.483138
+    },
+    {
+     "rank": 4,
+     "chunk_id": 152,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 5,
+     "score": 0.449436
+    },
+    {
+     "rank": 5,
+     "chunk_id": 171,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 24,
+     "score": 0.499454
+    }
+   ],
+   "relevant_ranks": [
+    1
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1
+   ],
+   "cited_sources": [
+    "数据库/知识条目/操作系统缓冲区（OS Buffer）.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 2678.6652999871876,
+   "total_ms": 11906.328199984273,
+   "stage_ms": {
+    "vector": 5.36640000063926,
+    "embedding": 1066.3021000218578,
+    "judge": 812.1341000078246,
+    "generate": 10010.94949999242
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 742,
+   "sentences": 2,
+   "uncited_sentences": 1,
+   "supported": 1,
+   "unsupported": 0,
+   "support_invalid": 0,
+   "support_calls": 1,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "Q25",
+   "category": "Q",
+   "text": "activeExpireCycle 每秒跑几次？由哪个参数控制？",
+   "expected_source": "数据库/Redis过期Key处理.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "activeExpireCycle 每秒的执行次数由参数 `hz` 控制。默认值为 10，即每秒执行 10 次 [1]。该参数的取值范围为 1~500，在高负载场景下可以升至 100 以增加过期键清理速度 [1]。\n\n此外，参数 `active-expire-cycle-tries` 控制每次检查扫描的尝试轮询次数，默认为 3 [1]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 188,
+     "source": "数据库/Redis过期Key处理.md",
+     "seq": 12,
+     "score": 0.54053
+    },
+    {
+     "rank": 2,
+     "chunk_id": 187,
+     "source": "数据库/Redis过期Key处理.md",
+     "seq": 11,
+     "score": 0.628991
+    },
+    {
+     "rank": 3,
+     "chunk_id": 202,
+     "source": "数据库/Redis过期Key处理.md",
+     "seq": 26,
+     "score": 0.508027
+    },
+    {
+     "rank": 4,
+     "chunk_id": 159,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 12,
+     "score": 0.46558
+    },
+    {
+     "rank": 5,
+     "chunk_id": 158,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 11,
+     "score": 0.459363
+    }
+   ],
+   "relevant_ranks": [
+    1,
+    3
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1
+   ],
+   "cited_sources": [
+    "数据库/Redis过期Key处理.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 14691.841200023191,
+   "total_ms": 24624.69150000834,
+   "stage_ms": {
+    "vector": 6.169700005557388,
+    "embedding": 1132.4751999927685,
+    "judge": 12374.368699995102,
+    "generate": 11105.30279998784
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 817,
+   "sentences": 4,
+   "uncited_sentences": 1,
+   "supported": 3,
+   "unsupported": 0,
+   "support_invalid": 0,
+   "support_calls": 3,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "Q26",
+   "category": "Q",
+   "text": "MQA 和 GQA 有什么区别？各自的代价是什么？",
+   "expected_source": "大模型应用/知识条目/KV Cache.md",
+   "decision": "PARTIAL",
+   "status": "PARTIAL",
+   "failure": null,
+   "answer": "基于提供的知识库片段，MQA 和 GQA 的区别及各自的代价如下：\n\n**1. MQA 和 GQA 的区别**\n*   **MQA（多查询注意力）**：其核心机制是让所有注意力头**共享**同一组 K、V [1]。\n*   **GQA（分组查询注意力）**：其核心机制是将 Head 进行分组，由每组共享 K、V [1]。\n*   **关系**：GQA 被视为 MHA（传统多头注意力）和 MQA 之间的折中方案 [1]。\n\n**2. 各自的代价/影响**\n*   **MQA 的代价**：虽然显存消耗大幅降低，但会导致**精度略有损失** [1]。\n*   **GQA 的代价**：片段中未明确提及 GQA 的具体“代价”，仅说明它是 MHA 和 MQA 的折中方案，且是 LLaMA-2/3 主力采用的方案 [1]。\n\n**覆盖边界声明**：\n以上回答严格基于知识库片段 [1]。该片段仅描述了 MQA 和 GQA 的基本定义、共享机制、MHA 的对比关系以及 MQA 的精度损失问题。片段**未涵盖** GQA 在精度、速度或显存方面相对于 MQA 或 MHA 的具体量化代价或权衡细节，也未提及除 LLaMA-2/3 和 PaLM 之外的其他应用场景。因此，关于 GQA 具体代价的更深层分析或对比数据在现有片段中无法回答。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 122,
+     "source": "大模型应用/知识条目/KV Cache.md",
+     "seq": 7,
+     "score": 0.561858
+    },
+    {
+     "rank": 2,
+     "chunk_id": 127,
+     "source": "大模型应用/知识条目/KV Cache.md",
+     "seq": 12,
+     "score": 0.428821
+    },
+    {
+     "rank": 3,
+     "chunk_id": 99,
+     "source": "大模型应用/LangChain 1.0/核心组件/message/多轮对话.md",
+     "seq": 8,
+     "score": 0.38703
+    },
+    {
+     "rank": 4,
+     "chunk_id": 20,
+     "source": "JavaWeb/JavaWeb后端开发/会话管理与登陆校验/Interceptor拦截器技术.md",
+     "seq": 20,
+     "score": 0.383972
+    },
+    {
+     "rank": 5,
+     "chunk_id": 126,
+     "source": "大模型应用/知识条目/KV Cache.md",
+     "seq": 11,
+     "score": 0.381429
+    }
+   ],
+   "relevant_ranks": [
+    1
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1
+   ],
+   "cited_sources": [
+    "大模型应用/知识条目/KV Cache.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 2069.398799998453,
+   "total_ms": 7089.561200002208,
+   "stage_ms": {
+    "vector": 9.923899982823059,
+    "embedding": 557.0507999800611,
+    "judge": 1107.0653999922797,
+    "generate": 5413.003099994967
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 417,
+   "sentences": 9,
+   "uncited_sentences": 3,
+   "supported": 5,
+   "unsupported": 1,
+   "support_invalid": 0,
+   "support_calls": 6,
+   "unsupported_sentences": [
+    {
+     "sentence": "以上回答严格基于知识库片段 [1]。",
+     "ranks": [
+      1
+     ]
+    }
+   ]
+  },
+  {
+   "question_id": "Q27",
+   "category": "Q",
+   "text": "epoll 的 ET 和 LT 有什么区别？默认是哪个？",
+   "expected_source": "数据库/知识条目/epoll（Linux 高并发网络模型）.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "epoll 的 ET 和 LT 的主要区别及默认模式如下：\n\n1.  **LT（水平触发，默认）**：只要文件描述符（FD）有未处理的数据，`epoll_wait` 就会持续通知。这种模式适合编程简单、防止漏处理的场景 [1]。\n2.  **ET（边缘触发，高效）**：只在 FD 状态发生变化的瞬间通知一次。要求程序必须一次性读写完所有数据（通常配合非阻塞 IO），性能更高 [1]。\n3.  **默认模式**：epoll 默认使用的是 LT（水平触发）模式 [1]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 208,
+     "source": "数据库/知识条目/epoll（Linux 高并发网络模型）.md",
+     "seq": 3,
+     "score": 0.584547
+    },
+    {
+     "rank": 2,
+     "chunk_id": 206,
+     "source": "数据库/知识条目/epoll（Linux 高并发网络模型）.md",
+     "seq": 1,
+     "score": 0.507402
+    },
+    {
+     "rank": 3,
+     "chunk_id": 207,
+     "source": "数据库/知识条目/epoll（Linux 高并发网络模型）.md",
+     "seq": 2,
+     "score": 0.549855
+    },
+    {
+     "rank": 4,
+     "chunk_id": 209,
+     "source": "数据库/知识条目/epoll（Linux 高并发网络模型）.md",
+     "seq": 4,
+     "score": 0.462945
+    },
+    {
+     "rank": 5,
+     "chunk_id": 91,
+     "source": "大模型应用/LangChain 1.0/核心组件/Agent/create_agent 与 Agent 输入输出.md",
+     "seq": 17,
+     "score": 0.408177
+    }
+   ],
+   "relevant_ranks": [
+    1
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1
+   ],
+   "cited_sources": [
+    "数据库/知识条目/epoll（Linux 高并发网络模型）.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 2760.5382000037935,
+   "total_ms": 4312.975900014862,
+   "stage_ms": {
+    "vector": 7.337499991990626,
+    "embedding": 870.1936999859754,
+    "judge": 1286.865600006422,
+    "generate": 2146.5476999874227
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 613,
+   "sentences": 5,
+   "uncited_sentences": 2,
+   "supported": 3,
+   "unsupported": 0,
+   "support_invalid": 0,
+   "support_calls": 3,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "Q28",
+   "category": "Q",
+   "text": "Redis 的 WATCH 是干嘛的？和 MULTI/EXEC 怎么配合？",
+   "expected_source": "数据库/知识条目/Redis 事务.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "Redis 的 WATCH 命令用于实现**乐观锁**，其作用是监视一个或多个键 [1]。如果在执行 EXEC 之前，被监视的键被其他客户端修改，则事务执行会失败 [1]。\n\nWATCH 与 MULTI/EXEC 的配合方式如下：\n1.  需要**乐观锁控制并发**时，建议配合 WATCH 使用 [1]。\n2.  具体流程是：使用 WATCH 监视键，随后使用 MULTI 标记事务开始，最后使用 EXEC 执行事务 [1]。\n3.  如果监视的键在 EXEC 之前被修改，事务将失败，通常需要重试 [1]。\n4.  注意：在高并发场景下应避免过度使用 WATCH，因为这可能导致较大的重试开销 [1]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 212,
+     "source": "数据库/知识条目/Redis 事务.md",
+     "seq": 3,
+     "score": 0.746621
+    },
+    {
+     "rank": 2,
+     "chunk_id": 210,
+     "source": "数据库/知识条目/Redis 事务.md",
+     "seq": 1,
+     "score": 0.663866
+    },
+    {
+     "rank": 3,
+     "chunk_id": 222,
+     "source": "数据库/知识条目/缓存.md",
+     "seq": 3,
+     "score": 0.597044
+    },
+    {
+     "rank": 4,
+     "chunk_id": 164,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 17,
+     "score": 0.545271
+    },
+    {
+     "rank": 5,
+     "chunk_id": 150,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 3,
+     "score": 0.567301
+    }
+   ],
+   "relevant_ranks": [
+    1,
+    2
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1
+   ],
+   "cited_sources": [
+    "数据库/知识条目/Redis 事务.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 5462.051600014092,
+   "total_ms": 9901.722700014943,
+   "stage_ms": {
+    "vector": 7.866100000683218,
+    "embedding": 963.7258999864571,
+    "judge": 4059.3366000102833,
+    "generate": 4868.803499994101
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 1092,
+   "sentences": 6,
+   "uncited_sentences": 0,
+   "supported": 4,
+   "unsupported": 2,
+   "support_invalid": 0,
+   "support_calls": 6,
+   "unsupported_sentences": [
+    {
+     "sentence": "具体流程是：使用 WATCH 监视键，随后使用 MULTI 标记事务开始，最后使用 EXEC 执行事务 [1]。",
+     "ranks": [
+      1
+     ]
+    },
+    {
+     "sentence": "如果监视的键在 EXEC 之前被修改，事务将失败，通常需要重试 [1]。",
+     "ranks": [
+      1
+     ]
+    }
+   ]
+  },
+  {
+   "question_id": "Q29",
+   "category": "Q",
+   "text": "docker 的 volumn 删了容器还在不在？",
+   "expected_source": "JavaWeb/知识条目/部署/Docker/Docker 数据卷（Volume）.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "根据提供的知识库片段，删除 Docker 的 volume（数据卷）并不会自动删除容器，容器依然存在，但会导致容器无法访问该卷中的数据，因为卷是独立于容器生命周期存在的。\n\n具体依据如下：\n1.  数据卷独立于容器的生命周期 [1]。\n2.  文档中明确列出的删除卷的命令是 `docker volume rm mydata`，而该片段中并未包含任何关于删除卷会触发删除容器的信息，仅展示了创建、挂载、查看和删除卷的操作 [2]。\n3.  由于数据卷“独立于容器生命周期”，意味着两者是解耦的，删除卷这一操作在逻辑上不包含删除容器的步骤 [1]。\n\n结论：仅删除 volume，容器依然保留（但在容器内挂载该卷的路径将失效或变为空目录，具体表现取决于容器状态，但片段未提及挂载失效后的具体行为，只强调了卷的生命周期独立性）[1][2]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 70,
+     "source": "JavaWeb/知识条目/部署/Docker/Docker 数据卷（Volume）.md",
+     "seq": 1,
+     "score": 0.637967
+    },
+    {
+     "rank": 2,
+     "chunk_id": 71,
+     "source": "JavaWeb/知识条目/部署/Docker/Docker 数据卷（Volume）.md",
+     "seq": 2,
+     "score": 0.621177
+    },
+    {
+     "rank": 3,
+     "chunk_id": 72,
+     "source": "JavaWeb/知识条目/部署/Docker/Docker 镜像.md",
+     "seq": 1,
+     "score": 0.528514
+    },
+    {
+     "rank": 4,
+     "chunk_id": 74,
+     "source": "JavaWeb/知识条目/部署/Docker/Docker 镜像.md",
+     "seq": 3,
+     "score": 0.499866
+    },
+    {
+     "rank": 5,
+     "chunk_id": 61,
+     "source": "JavaWeb/知识条目/后端/Bean.md",
+     "seq": 2,
+     "score": 0.515196
+    }
+   ],
+   "relevant_ranks": [
+    1,
+    2
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    2
+   ],
+   "cited_sources": [
+    "JavaWeb/知识条目/部署/Docker/Docker 数据卷（Volume）.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 4529.983899992658,
+   "total_ms": 8595.95609997632,
+   "stage_ms": {
+    "vector": 9.258400008548051,
+    "embedding": 971.5026000048965,
+    "judge": 2938.4276999917347,
+    "generate": 4673.720399994636
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 1297,
+   "sentences": 5,
+   "uncited_sentences": 1,
+   "supported": 2,
+   "unsupported": 2,
+   "support_invalid": 0,
+   "support_calls": 4,
+   "unsupported_sentences": [
+    {
+     "sentence": "由于数据卷“独立于容器生命周期”，意味着两者是解耦的，删除卷这一操作在逻辑上不包含删除容器的步骤 [1]。",
+     "ranks": [
+      1
+     ]
+    },
+    {
+     "sentence": "结论：仅删除 volume，容器依然保留（但在容器内挂载该卷的路径将失效或变为空目录，具体表现取决于容器状态，但片段未提及挂载失效后的具体行为，只强调了卷的生命周期独立性）[1][2]。",
+     "ranks": [
+      1,
+      2
+     ]
+    }
+   ]
+  },
+  {
+   "question_id": "Q30",
+   "category": "Q",
+   "text": "cookie 和 seesion 有啥区别，各存在哪一边？",
+   "expected_source": "JavaWeb/知识条目/后端/Cookie 和 Session.md",
+   "decision": "PARTIAL",
+   "status": "PARTIAL",
+   "failure": null,
+   "answer": "根据提供的知识库片段，Cookie 和 Session 的区别及存储位置如下：\n\n**区别：**\n*   **数据存储量与用途**：Cookie 适合存放少量数据，而 Session 更适合保存敏感状态 [1]。\n*   **应用场景**：两者都常用于登录校验、购物车和验证码校验 [1]。具体而言，登录校验常结合过滤器实现，通过 Session 保存用户信息 [2]。\n*   **基础目的**：二者都用于保存会话状态，以解决 HTTP 协议无状态导致无法自动关联同一用户多次请求的问题，从而保存登录状态、用户标识等信息 [2]。\n\n**存储位置：**\n*   **Cookie**：保存在**浏览器端** [1]。\n*   **Session**：保存在**服务器端** [1]。\n\n**覆盖边界声明：**\n以上回答仅基于提供的片段 [1] 和 [2] 中的信息。片段主要涵盖了两者的存储位置、数据量适配场景及基本用途，未涉及生命周期、安全性细节、具体实现代码或与其他会话技术（如 JWT）的详细对比等其他方面的内容。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 63,
+     "source": "JavaWeb/知识条目/后端/Cookie 和 Session.md",
+     "seq": 2,
+     "score": 0.687256
+    },
+    {
+     "rank": 2,
+     "chunk_id": 62,
+     "source": "JavaWeb/知识条目/后端/Cookie 和 Session.md",
+     "seq": 1,
+     "score": 0.593785
+    },
+    {
+     "rank": 3,
+     "chunk_id": 59,
+     "source": "JavaWeb/知识条目/前端/onMounted生命周期函数.md",
+     "seq": 3,
+     "score": 0.430873
+    },
+    {
+     "rank": 4,
+     "chunk_id": 20,
+     "source": "JavaWeb/JavaWeb后端开发/会话管理与登陆校验/Interceptor拦截器技术.md",
+     "seq": 20,
+     "score": 0.427091
+    },
+    {
+     "rank": 5,
+     "chunk_id": 205,
+     "source": "数据库/知识条目/ACID.md",
+     "seq": 3,
+     "score": 0.428808
+    }
+   ],
+   "relevant_ranks": [
+    1,
+    2
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    2
+   ],
+   "cited_sources": [
+    "JavaWeb/知识条目/后端/Cookie 和 Session.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 3177.80400000629,
+   "total_ms": 6377.47509998735,
+   "stage_ms": {
+    "vector": 12.922399997478351,
+    "embedding": 991.9870999874547,
+    "judge": 1613.717500003986,
+    "generate": 3755.3226000163704
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 694,
+   "sentences": 8,
+   "uncited_sentences": 1,
+   "supported": 6,
+   "unsupported": 1,
+   "support_invalid": 0,
+   "support_calls": 7,
+   "unsupported_sentences": [
+    {
+     "sentence": "以上回答仅基于提供的片段 [1] 和 [2] 中的信息。",
+     "ranks": [
+      1,
+      2
+     ]
+    }
+   ]
+  },
+  {
+   "question_id": "Q31",
+   "category": "Q",
+   "text": "网络数据在真正发出去之前先暂存在哪里？",
+   "expected_source": "数据库/知识条目/操作系统缓冲区（OS Buffer）.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "网络数据在真正发出去之前，先暂存在 **Socket Buffer（套接字缓冲区）** 中 [5]。该缓冲区用于网络通信，专门暂存待发送或待接收的数据包 [5]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 218,
+     "source": "数据库/知识条目/操作系统缓冲区（OS Buffer）.md",
+     "seq": 2,
+     "score": 0.555779
+    },
+    {
+     "rank": 2,
+     "chunk_id": 220,
+     "source": "数据库/知识条目/缓存.md",
+     "seq": 1,
+     "score": 0.56122
+    },
+    {
+     "rank": 3,
+     "chunk_id": 217,
+     "source": "数据库/知识条目/操作系统缓冲区（OS Buffer）.md",
+     "seq": 1,
+     "score": 0.533753
+    },
+    {
+     "rank": 4,
+     "chunk_id": 222,
+     "source": "数据库/知识条目/缓存.md",
+     "seq": 3,
+     "score": 0.545704
+    },
+    {
+     "rank": 5,
+     "chunk_id": 219,
+     "source": "数据库/知识条目/操作系统缓冲区（OS Buffer）.md",
+     "seq": 3,
+     "score": 0.528357
+    }
+   ],
+   "relevant_ranks": [
+    1,
+    3,
+    5
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    5
+   ],
+   "cited_sources": [
+    "数据库/知识条目/操作系统缓冲区（OS Buffer）.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 44141.293900000164,
+   "total_ms": 44741.63409997709,
+   "stage_ms": {
+    "vector": 14.420899999095127,
+    "embedding": 902.4818000034429,
+    "judge": 25094.105699972715,
+    "generate": 18728.993299999274
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 1045,
+   "sentences": 2,
+   "uncited_sentences": 0,
+   "supported": 1,
+   "unsupported": 1,
+   "support_invalid": 0,
+   "support_calls": 2,
+   "unsupported_sentences": [
+    {
+     "sentence": "网络数据在真正发出去之前，先暂存在 **Socket Buffer（套接字缓冲区）** 中 [5]。",
+     "ranks": [
+      5
+     ]
+    }
+   ]
+  },
+  {
+   "question_id": "Q32",
+   "category": "Q",
+   "text": "Tomcat 是数据库吗？它和 Servlet 是什么关系？",
+   "expected_source": "JavaWeb/知识条目/后端/Tomcat.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "Tomcat 不是数据库，它属于 Web 容器 [1]。Tomcat 和 Servlet 的关系是：Tomcat 用来部署和运行 Servlet [3]，在学习 Servlet 时通常先接触 Tomcat [1]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 68,
+     "source": "JavaWeb/知识条目/后端/Tomcat.md",
+     "seq": 2,
+     "score": 0.69894
+    },
+    {
+     "rank": 2,
+     "chunk_id": 203,
+     "source": "数据库/知识条目/ACID.md",
+     "seq": 1,
+     "score": 0.514443
+    },
+    {
+     "rank": 3,
+     "chunk_id": 67,
+     "source": "JavaWeb/知识条目/后端/Tomcat.md",
+     "seq": 1,
+     "score": 0.679238
+    },
+    {
+     "rank": 4,
+     "chunk_id": 4,
+     "source": "JavaWeb/JavaWeb后端开发/会话管理与登陆校验/Interceptor拦截器技术.md",
+     "seq": 4,
+     "score": 0.577947
+    },
+    {
+     "rank": 5,
+     "chunk_id": 204,
+     "source": "数据库/知识条目/ACID.md",
+     "seq": 2,
+     "score": 0.484169
+    }
+   ],
+   "relevant_ranks": [
+    1,
+    3
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    3
+   ],
+   "cited_sources": [
+    "JavaWeb/知识条目/后端/Tomcat.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 2939.855400007218,
+   "total_ms": 3573.271000001114,
+   "stage_ms": {
+    "vector": 12.39359995815903,
+    "embedding": 891.2579000170808,
+    "judge": 780.3898999991361,
+    "generate": 1887.8862999845296
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 547,
+   "sentences": 2,
+   "uncited_sentences": 0,
+   "supported": 2,
+   "unsupported": 0,
+   "support_invalid": 0,
+   "support_calls": 2,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "Q33",
+   "category": "Q",
+   "text": "Pinia 的 state 刷新页面就没了，用哪个 plugin 能存到 localStorage？",
+   "expected_source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "使用 **pinia-plugin-persistedstate** 插件可以将 Pinia 的 state 持久化到 localStorage [1]。\n\n具体使用方式如下：\n1. 安装插件：`npm install pinia-plugin-persistedstate` [1]。\n2. 在创建 Pinia 实例时启用该插件：`pinia.use(persist)` [1]。\n3. 在 `defineStore` 中配置 `persist` 选项，设置 `storage: localStorage` 以及需要持久化的 `paths` 和 `key` [1]。\n\n该插件的优势包括自动同步 localStorage 和 state、页面刷新后自动恢复状态，且无需手动编写 localStorage 代码 [1]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 45,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 18,
+     "score": 0.726505
+    },
+    {
+     "rank": 2,
+     "chunk_id": 56,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 29,
+     "score": 0.612527
+    },
+    {
+     "rank": 3,
+     "chunk_id": 43,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 16,
+     "score": 0.597387
+    },
+    {
+     "rank": 4,
+     "chunk_id": 55,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 28,
+     "score": 0.620184
+    },
+    {
+     "rank": 5,
+     "chunk_id": 50,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 23,
+     "score": 0.545141
+    }
+   ],
+   "relevant_ranks": [
+    1,
+    3
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1
+   ],
+   "cited_sources": [
+    "JavaWeb/Web前端设计/Pinia状态管理.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 14318.294099997729,
+   "total_ms": 17409.588999988046,
+   "stage_ms": {
+    "vector": 16.356700041797012,
+    "embedding": 1016.1567000031937,
+    "judge": 11934.487599995919,
+    "generate": 4438.788300001761
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 1466,
+   "sentences": 5,
+   "uncited_sentences": 0,
+   "supported": 5,
+   "unsupported": 0,
+   "support_invalid": 0,
+   "support_calls": 5,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "Q34",
+   "category": "Q",
+   "text": "Nginx 反向代理的配置里 proxy_pass 后面写什么？",
+   "expected_source": "JavaWeb/Web前端设计/Nginx 反向代理服务器.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "在提供的 Nginx 反向代理配置示例中，`proxy_pass` 后面写的是 `http://localhost:8080/` [1]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 27,
+     "source": "JavaWeb/Web前端设计/Nginx 反向代理服务器.md",
+     "seq": 3,
+     "score": 0.694042
+    },
+    {
+     "rank": 2,
+     "chunk_id": 25,
+     "source": "JavaWeb/Web前端设计/Nginx 反向代理服务器.md",
+     "seq": 1,
+     "score": 0.653014
+    },
+    {
+     "rank": 3,
+     "chunk_id": 26,
+     "source": "JavaWeb/Web前端设计/Nginx 反向代理服务器.md",
+     "seq": 2,
+     "score": 0.604501
+    },
+    {
+     "rank": 4,
+     "chunk_id": 222,
+     "source": "数据库/知识条目/缓存.md",
+     "seq": 3,
+     "score": 0.496802
+    },
+    {
+     "rank": 5,
+     "chunk_id": 16,
+     "source": "JavaWeb/JavaWeb后端开发/会话管理与登陆校验/Interceptor拦截器技术.md",
+     "seq": 16,
+     "score": 0.52072
+    }
+   ],
+   "relevant_ranks": [
+    1
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1
+   ],
+   "cited_sources": [
+    "JavaWeb/Web前端设计/Nginx 反向代理服务器.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 25034.83469999628,
+   "total_ms": 25592.09409999312,
+   "stage_ms": {
+    "vector": 10.259100003167987,
+    "embedding": 927.8025999956299,
+    "judge": 23072.783300012816,
+    "generate": 1578.538200003095
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 874,
+   "sentences": 1,
+   "uncited_sentences": 0,
+   "supported": 1,
+   "unsupported": 0,
+   "support_invalid": 0,
+   "support_calls": 1,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "P3",
+   "category": "P",
+   "text": "Docker 数据卷怎么备份？备份时要注意什么？",
+   "expected_source": null,
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "根据提供的知识库片段，关于 Docker 数据卷的备份方法及其注意事项回答如下：\n\n**备份方法**\n备份数据卷可以使用 `docker run` 命令配合 `alpine` 镜像和 `tar` 工具进行。具体命令为：\n`docker run --rm -v mydata:/source -v $(pwd):/backup alpine tar czf /backup/backup.tar.gz -C /source .` [2]\n\n**注意事项**\n1. **使用推荐的管理方式**：生产环境应优先使用由 Docker 管理的 **Volume（卷）**，因为这种方式的备份和迁移比较方便 [2]。\n2. **语法规范**：在挂载卷时，建议使用 `--mount` 语法（如 `--mount source=mydata,target=/app/data`），因为它比旧的 `-v` 语法更明确 [2]。\n3. **数据特性理解**：数据卷独立于容器的生命周期，即使容器被删除，数据依然保留，因此需要定期清理无用的卷（使用 `docker volume prune`）以维护环境 [1][2]。\n4. **区分挂载类型**：备份操作主要针对需要持久化的数据。如果是 **tmpfs** 类型的挂载，数据存储在内存中且容器停止即清除，无需也不适用常规备份 [2]。\n\n[1] [2]",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 70,
+     "source": "JavaWeb/知识条目/部署/Docker/Docker 数据卷（Volume）.md",
+     "seq": 1,
+     "score": 0.737631
+    },
+    {
+     "rank": 2,
+     "chunk_id": 71,
+     "source": "JavaWeb/知识条目/部署/Docker/Docker 数据卷（Volume）.md",
+     "seq": 2,
+     "score": 0.703895
+    },
+    {
+     "rank": 3,
+     "chunk_id": 74,
+     "source": "JavaWeb/知识条目/部署/Docker/Docker 镜像.md",
+     "seq": 3,
+     "score": 0.617896
+    },
+    {
+     "rank": 4,
+     "chunk_id": 153,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 6,
+     "score": 0.522564
+    },
+    {
+     "rank": 5,
+     "chunk_id": 72,
+     "source": "JavaWeb/知识条目/部署/Docker/Docker 镜像.md",
+     "seq": 1,
+     "score": 0.572661
+    }
+   ],
+   "relevant_ranks": [
+    1,
+    2
+   ],
+   "expected_rank": null,
+   "cited_ranks": [
+    1,
+    2
+   ],
+   "cited_sources": [
+    "JavaWeb/知识条目/部署/Docker/Docker 数据卷（Volume）.md"
+   ],
+   "wrong_source": null,
+   "first_text_ms": 1970.750099979341,
+   "total_ms": 14291.521599981934,
+   "stage_ms": {
+    "vector": 11.125699995318428,
+    "embedding": 858.3596000098623,
+    "judge": 670.5550999904517,
+    "generate": 12748.360800003866
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 1296,
+   "sentences": 8,
+   "uncited_sentences": 2,
+   "supported": 6,
+   "unsupported": 0,
+   "support_invalid": 0,
+   "support_calls": 6,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "P4",
+   "category": "P",
+   "text": "pdflush 在哪个 Linux 内核版本被 flusher 线程取代了？",
+   "expected_source": null,
+   "decision": "PARTIAL",
+   "status": "PARTIAL",
+   "failure": null,
+   "answer": "根据提供的知识库片段，片段 [1] 中提到了 Linux 的 `pdflush` 作为内核后台线程用于定期将缓冲区中的脏页写入磁盘，但**未提及** `pdflush` 在哪个 Linux 内核版本被 `flusher` 线程取代。\n\n因此，基于已有内容无法回答该具体版本信息。\n\n**覆盖边界说明**：库中只有片段 [1] 涉及 `pdflush` 的定义和作用，未包含关于其被 `flusher` 线程取代的具体内核版本信息，故无法回答该部分。\n\n[1]",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 219,
+     "source": "数据库/知识条目/操作系统缓冲区（OS Buffer）.md",
+     "seq": 3,
+     "score": 0.487631
+    },
+    {
+     "rank": 2,
+     "chunk_id": 218,
+     "source": "数据库/知识条目/操作系统缓冲区（OS Buffer）.md",
+     "seq": 2,
+     "score": 0.438757
+    },
+    {
+     "rank": 3,
+     "chunk_id": 217,
+     "source": "数据库/知识条目/操作系统缓冲区（OS Buffer）.md",
+     "seq": 1,
+     "score": 0.457793
+    },
+    {
+     "rank": 4,
+     "chunk_id": 207,
+     "source": "数据库/知识条目/epoll（Linux 高并发网络模型）.md",
+     "seq": 2,
+     "score": 0.426586
+    },
+    {
+     "rank": 5,
+     "chunk_id": 206,
+     "source": "数据库/知识条目/epoll（Linux 高并发网络模型）.md",
+     "seq": 1,
+     "score": 0.425611
+    }
+   ],
+   "relevant_ranks": [
+    1
+   ],
+   "expected_rank": null,
+   "cited_ranks": [
+    1
+   ],
+   "cited_sources": [
+    "数据库/知识条目/操作系统缓冲区（OS Buffer）.md"
+   ],
+   "wrong_source": null,
+   "first_text_ms": 5325.84350000252,
+   "total_ms": 7470.66230000928,
+   "stage_ms": {
+    "vector": 10.611100005917251,
+    "embedding": 899.2386999889277,
+    "judge": 3757.6586000213865,
+    "generate": 2801.3245000038296
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 756,
+   "sentences": 3,
+   "uncited_sentences": 1,
+   "supported": 2,
+   "unsupported": 0,
+   "support_invalid": 0,
+   "support_calls": 2,
+   "unsupported_sentences": []
+  },
+  {
+   "question_id": "P5",
+   "category": "P",
+   "text": "pinia-plugin-persistedstate 能把状态存到 IndexedDB 吗？",
+   "expected_source": null,
+   "decision": "PARTIAL",
+   "status": "PARTIAL",
+   "failure": null,
+   "answer": "根据提供的知识库片段，**无法确定** pinia-plugin-persistedstate 是否支持将状态存到 IndexedDB。\n\n片段 [1] 中演示的 `storage` 配置项仅展示了使用 `localStorage`（和注释中提到的 `sessionStorage`）作为存储方式 [1]。片段中未提及 IndexedDB 或任何非 Web Storage API 的存储引擎支持情况。\n\n**覆盖边界声明**：当前知识库片段仅包含 pinia-plugin-persistedstate 的基本安装、配置示例（使用 localStorage）及其相对于手动操作的三大优势 [1]。未覆盖该插件是否支持自定义 storage 适配器（如 IndexedDB 适配包）或官方是否内置多存储引擎支持等扩展信息，因此无法基于现有片段回答关于 IndexedDB 支持的问题。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 45,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 18,
+     "score": 0.683029
+    },
+    {
+     "rank": 2,
+     "chunk_id": 56,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 29,
+     "score": 0.555399
+    },
+    {
+     "rank": 3,
+     "chunk_id": 28,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 1,
+     "score": 0.551378
+    },
+    {
+     "rank": 4,
+     "chunk_id": 29,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 2,
+     "score": 0.531599
+    },
+    {
+     "rank": 5,
+     "chunk_id": 35,
+     "source": "JavaWeb/Web前端设计/Pinia状态管理.md",
+     "seq": 8,
+     "score": 0.54845
+    }
+   ],
+   "relevant_ranks": [
+    1
+   ],
+   "expected_rank": null,
+   "cited_ranks": [
+    1
+   ],
+   "cited_sources": [
+    "JavaWeb/Web前端设计/Pinia状态管理.md"
+   ],
+   "wrong_source": null,
+   "first_text_ms": 25751.312300009886,
+   "total_ms": 27591.937399993185,
+   "stage_ms": {
+    "vector": 6.740300013916567,
+    "embedding": 882.1460999897681,
+    "judge": 23644.103800004814,
+    "generate": 3056.2025000108406
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 957,
+   "sentences": 5,
+   "uncited_sentences": 3,
+   "supported": 1,
+   "unsupported": 1,
+   "support_invalid": 0,
+   "support_calls": 2,
+   "unsupported_sentences": [
+    {
+     "sentence": "**覆盖边界声明**：当前知识库片段仅包含 pinia-plugin-persistedstate 的基本安装、配置示例（使用 localStorage）及其相对于手动操作的三大优势 [1]。",
+     "ranks": [
+      1
+     ]
+    }
+   ]
+  },
+  {
+   "question_id": "P6",
+   "category": "P",
+   "text": "epoll 在 Windows 上怎么用？",
+   "expected_source": null,
+   "decision": "PARTIAL",
+   "status": "PARTIAL",
+   "failure": null,
+   "answer": "根据提供的知识库片段，无法回答“epoll 在 Windows 上怎么用”这个问题，因为片段中仅涉及 Linux 环境下的 epoll 机制。\n\n基于已有内容的作答如下：\nepoll 是 Linux 内核提供的一种可扩展的 I/O 事件通知机制 [1]。它适用于 Linux 下的高性能 I/O 多路复用场景，是 Nginx、Redis 等高性能服务的基础 [3]。片段中提到的核心系统调用（如 `epoll_create`、`epoll_ctl`、`epoll_wait`）以及底层数据结构（红黑树、就绪链表）均是针对 Linux 系统设计的 [2]。\n\n覆盖边界声明：\n知识库片段中仅包含关于 **Linux 系统**下 epoll 的定义、原理、系统调用及适用场景的描述 [1,2,3]，**未包含**任何关于 Windows 系统、epoll 在 Windows 上的实现方式、跨平台替代方案（如 IOCP、poll2 等）或如何在 Windows 上使用该机制的信息。因此，基于给定片段无法回答在 Windows 上如何使用 epoll。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 207,
+     "source": "数据库/知识条目/epoll（Linux 高并发网络模型）.md",
+     "seq": 2,
+     "score": 0.705564
+    },
+    {
+     "rank": 2,
+     "chunk_id": 208,
+     "source": "数据库/知识条目/epoll（Linux 高并发网络模型）.md",
+     "seq": 3,
+     "score": 0.622164
+    },
+    {
+     "rank": 3,
+     "chunk_id": 206,
+     "source": "数据库/知识条目/epoll（Linux 高并发网络模型）.md",
+     "seq": 1,
+     "score": 0.641406
+    },
+    {
+     "rank": 4,
+     "chunk_id": 209,
+     "source": "数据库/知识条目/epoll（Linux 高并发网络模型）.md",
+     "seq": 4,
+     "score": 0.559978
+    },
+    {
+     "rank": 5,
+     "chunk_id": 89,
+     "source": "大模型应用/LangChain 1.0/核心组件/Agent/create_agent 与 Agent 输入输出.md",
+     "seq": 15,
+     "score": 0.49325
+    }
+   ],
+   "relevant_ranks": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "expected_rank": null,
+   "cited_ranks": [
+    1,
+    2,
+    3
+   ],
+   "cited_sources": [
+    "数据库/知识条目/epoll（Linux 高并发网络模型）.md"
+   ],
+   "wrong_source": null,
+   "first_text_ms": 9229.593199997908,
+   "total_ms": 13286.76409999025,
+   "stage_ms": {
+    "vector": 6.557699991390109,
+    "embedding": 898.885300004622,
+    "judge": 1093.6591000063345,
+    "generate": 11285.07380001247
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 1544,
+   "sentences": 6,
+   "uncited_sentences": 2,
+   "supported": 3,
+   "unsupported": 1,
+   "support_invalid": 0,
+   "support_calls": 4,
+   "unsupported_sentences": [
+    {
+     "sentence": "片段中提到的核心系统调用（如 `epoll_create`、`epoll_ctl`、`epoll_wait`）以及底层数据结构（红黑树、就绪链表）均是针对 Linux 系统设计的 [2]。",
+     "ranks": [
+      2
+     ]
+    }
+   ]
+  },
+  {
+   "question_id": "R9",
+   "category": "R",
+   "text": "redis 把 aof 文件搞坏了还能救回来吗？",
+   "expected_source": "数据库/Redis/Redis持久化.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "能救回来。根据知识库片段，损坏的 AOF 文件可以使用 `redis-check-aof --fix` 进行修复 [4]。\n\n具体的手动恢复流程包括：首先停止 Redis 并备份当前数据文件，然后使用 `redis-check-aof` 检查 AOF 文件完整性 [1]。如果确认文件损坏，可以使用 `redis-check-aof --fix` 命令进行修复 [1][2]。在执行该命令时，系统会提示将要截断的字节数，用户确认后（输入 y），工具会将 AOF 文件截断到最后一个有效的命令位置，从而修复损坏部分 [2]。修复完成后，重新启动 Redis 即可 [1][2]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 174,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 27,
+     "score": 0.711894
+    },
+    {
+     "rank": 2,
+     "chunk_id": 175,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 28,
+     "score": 0.75785
+    },
+    {
+     "rank": 3,
+     "chunk_id": 172,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 25,
+     "score": 0.678273
+    },
+    {
+     "rank": 4,
+     "chunk_id": 176,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 29,
+     "score": 0.681045
+    },
+    {
+     "rank": 5,
+     "chunk_id": 160,
+     "source": "数据库/Redis/Redis持久化.md",
+     "seq": 13,
+     "score": 0.654259
+    }
+   ],
+   "relevant_ranks": [
+    1,
+    2,
+    4
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    2,
+    4
+   ],
+   "cited_sources": [
+    "数据库/Redis/Redis持久化.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 2794.473099987954,
+   "total_ms": 4567.71679999656,
+   "stage_ms": {
+    "vector": 6.708100001560524,
+    "embedding": 895.2504000044428,
+    "judge": 709.2749000003096,
+    "generate": 2954.379600007087
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 1266,
+   "sentences": 6,
+   "uncited_sentences": 1,
+   "supported": 4,
+   "unsupported": 1,
+   "support_invalid": 0,
+   "support_calls": 5,
+   "unsupported_sentences": [
+    {
+     "sentence": "在执行该命令时，系统会提示将要截断的字节数，用户确认后（输入 y），工具会将 AOF 文件截断到最后一个有效的命令位置，从而修复损坏部分 [2]。",
+     "ranks": [
+      2
+     ]
+    }
+   ]
+  },
+  {
+   "question_id": "R10",
+   "category": "R",
+   "text": "LangChain 里想让模型只记住最近几轮对话、别记太多，用什么？",
+   "expected_source": "大模型应用/LangChain 1.0/核心组件/message/多轮对话.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "在 LangChain 中，想让模型只记住最近几轮对话，应使用 **`ConversationBufferWindowMemory`**（滑动窗口策略）[1]。\n\n具体做法是设置参数 `k`，例如 `k=4` 表示只保留最近 4 轮对话（即历史消息最多 8 条）[1]。这种策略适用于对话轮次较多，但只需要模型关注近期上下文的场景 [1]。\n\n此外，`ConversationBufferWindowMemory` 属于“滑动窗口”策略，其特点是成本可控，但可能会丢失早期信息，适用于中等长度的对话 [2]。在 LangChain Memory 组件分类中，它也被简称为 `WindowMemory` [3]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 103,
+     "source": "大模型应用/LangChain 1.0/核心组件/message/多轮对话.md",
+     "seq": 12,
+     "score": 0.706162
+    },
+    {
+     "rank": 2,
+     "chunk_id": 101,
+     "source": "大模型应用/LangChain 1.0/核心组件/message/多轮对话.md",
+     "seq": 10,
+     "score": 0.642755
+    },
+    {
+     "rank": 3,
+     "chunk_id": 112,
+     "source": "大模型应用/LangChain 1.0/核心组件/message/多轮对话.md",
+     "seq": 21,
+     "score": 0.619978
+    },
+    {
+     "rank": 4,
+     "chunk_id": 92,
+     "source": "大模型应用/LangChain 1.0/核心组件/message/多轮对话.md",
+     "seq": 1,
+     "score": 0.624408
+    },
+    {
+     "rank": 5,
+     "chunk_id": 104,
+     "source": "大模型应用/LangChain 1.0/核心组件/message/多轮对话.md",
+     "seq": 13,
+     "score": 0.635195
+    }
+   ],
+   "relevant_ranks": [
+    1,
+    2,
+    3
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    1,
+    2,
+    3
+   ],
+   "cited_sources": [
+    "大模型应用/LangChain 1.0/核心组件/message/多轮对话.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 2149.1630999953486,
+   "total_ms": 3785.3685000154655,
+   "stage_ms": {
+    "vector": 17.21309998538345,
+    "embedding": 753.5006999969482,
+    "judge": 909.7028999822214,
+    "generate": 2103.197899996303
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 1245,
+   "sentences": 5,
+   "uncited_sentences": 0,
+   "supported": 2,
+   "unsupported": 3,
+   "support_invalid": 0,
+   "support_calls": 5,
+   "unsupported_sentences": [
+    {
+     "sentence": "在 LangChain 中，想让模型只记住最近几轮对话，应使用 **`ConversationBufferWindowMemory`**（滑动窗口策略）[1]。",
+     "ranks": [
+      1
+     ]
+    },
+    {
+     "sentence": "此外，`ConversationBufferWindowMemory` 属于“滑动窗口”策略，其特点是成本可控，但可能会丢失早期信息，适用于中等长度的对话 [2]。",
+     "ranks": [
+      2
+     ]
+    },
+    {
+     "sentence": "在 LangChain Memory 组件分类中，它也被简称为 `WindowMemory` [3]。",
+     "ranks": [
+      3
+     ]
+    }
+   ]
+  },
+  {
+   "question_id": "R11",
+   "category": "R",
+   "text": "LangChain 里怎么把一个普通 Python 函数变成模型能调用的工具？",
+   "expected_source": "大模型应用/知识条目/Tools.md",
+   "decision": "SUFFICIENT",
+   "status": "ANSWERED",
+   "failure": null,
+   "answer": "根据提供的知识库片段，将一个普通 Python 函数变成模型能调用的工具（Tool）的方法如下：\n\n1.  **使用 `@tool` 装饰器**：\n    这是推荐的方法。通过从 `langchain_core.tools`（或 LangChain 1.0 中的 `langchain.tools`）导入 `tool`，并将其作为装饰器应用于普通 Python 函数上 [2]。\n    *   被装饰的函数会自动转换为工具对象，并获得 `.invoke()` 等方法 [2]。\n    *   该函数会自动关联三个关键元数据：\n        *   **name**：工具名称 [2]。\n        *   **description**：功能描述 [2]。\n        *   **args**：参数的 JSON Schema，这是由函数的类型注解自动推断出来的 [2]。\n\n    代码示例如下：\n    ```python\n    from langchain_core.tools import tool\n\n    @tool\n    def multiply(a: int, b: int) -> int:\n        \"\"\"Multiply two numbers.\"\"\"\n        return a * b\n    ```\n    [2][5]\n\n2.  **替代创建方式**：\n    除了使用装饰器，也可以通过继承 `BaseTool` 或使用 `StructuredTool` 来创建工具 [2]。\n\n3.  **绑定到模型**：\n    创建好的工具需要通过 `.bind_tools()` 方法绑定到支持工具调用的聊天模型上，模型才能在适当时请求执行该函数 [2]。\n\n4.  **在 Agent 中使用**：\n    在 LangChain 1.0 中，可以将工具列表直接传入 `create_agent` 函数的 `tools` 参数中，Agent 会在循环中调用模型并执行工具 [2][5]。\n\n    示例：\n    ```python\n    from langchain.agents import create_agent\n    from langchain.tools import tool\n\n    @tool\n    def get_weather(city: str) -> str:\n        \"\"\"查询指定城市的当前天气\"\"\"\n        return f\"{city}今天晴，气温 25°C，风力 3 级\"\n\n    # ... 假设 model 已定义\n    agent = create_agent(\n        model=model,\n        tools=[get_weather],\n        # ...\n    )\n    ```\n    [5]\n\n**总结**：最简洁的方式是使用 `@tool` 装饰器装饰一个带有类型注解和文档字符串的 Python 函数，这样它就会被自动封装成包含名称、描述和参数模式的 Tool 对象，可供模型调用 [2]。",
+   "candidates": [
+    {
+     "rank": 1,
+     "chunk_id": 146,
+     "source": "大模型应用/知识条目/Tools.md",
+     "seq": 2,
+     "score": 0.704858
+    },
+    {
+     "rank": 2,
+     "chunk_id": 147,
+     "source": "大模型应用/知识条目/Tools.md",
+     "seq": 3,
+     "score": 0.625657
+    },
+    {
+     "rank": 3,
+     "chunk_id": 114,
+     "source": "大模型应用/知识条目/invoke、stream 与 batch.md",
+     "seq": 2,
+     "score": 0.610833
+    },
+    {
+     "rank": 4,
+     "chunk_id": 145,
+     "source": "大模型应用/知识条目/Tools.md",
+     "seq": 1,
+     "score": 0.579545
+    },
+    {
+     "rank": 5,
+     "chunk_id": 88,
+     "source": "大模型应用/LangChain 1.0/核心组件/Agent/create_agent 与 Agent 输入输出.md",
+     "seq": 14,
+     "score": 0.608929
+    }
+   ],
+   "relevant_ranks": [
+    1,
+    2,
+    5
+   ],
+   "expected_rank": 1,
+   "cited_ranks": [
+    2,
+    5
+   ],
+   "cited_sources": [
+    "大模型应用/LangChain 1.0/核心组件/Agent/create_agent 与 Agent 输入输出.md",
+    "大模型应用/知识条目/Tools.md"
+   ],
+   "wrong_source": false,
+   "first_text_ms": 3207.819600007497,
+   "total_ms": 9900.55590000702,
+   "stage_ms": {
+    "vector": 5.778499995358288,
+    "embedding": 782.3248000058811,
+    "judge": 1265.0459000142291,
+    "generate": 7842.998899985105
+   },
+   "model_calls": 2,
+   "attempts": 1,
+   "generate_prompt_chars": 2113,
+   "sentences": 11,
+   "uncited_sentences": 1,
+   "supported": 7,
+   "unsupported": 3,
+   "support_invalid": 0,
+   "support_calls": 10,
+   "unsupported_sentences": [
+    {
+     "sentence": "**args**：参数的 JSON Schema，这是由函数的类型注解自动推断出来的 [2]。",
+     "ranks": [
+      2
+     ]
+    },
+    {
+     "sentence": "[2][5]",
+     "ranks": [
+      2,
+      5
+     ]
+    },
+    {
+     "sentence": "**总结**：最简洁的方式是使用 `@tool` 装饰器装饰一个带有类型注解和文档字符串的 Python 函数，这样它就会被自动封装成包含名称、描述和参数模式的 Tool 对象，可供模型调用 [2]。",
+     "ranks": [
+      2
+     ]
+    }
+   ]
+  }
+ ],
+ "summary": {
+  "categories": {
+   "Q": {
+    "total": 12,
+    "decisions": {
+     "SUFFICIENT": 9,
+     "PARTIAL": 3
+    },
+    "statuses": {
+     "ANSWERED": 9,
+     "PARTIAL": 3
+    },
+    "expected_decisions": 12,
+    "failures": 0
+   },
+   "R": {
+    "total": 3,
+    "decisions": {
+     "SUFFICIENT": 3
+    },
+    "statuses": {
+     "ANSWERED": 3
+    },
+    "expected_decisions": 3,
+    "failures": 0
+   },
+   "N": {
+    "total": 0,
+    "decisions": {},
+    "statuses": {},
+    "expected_decisions": 0,
+    "failures": 0
+   },
+   "P": {
+    "total": 4,
+    "decisions": {
+     "SUFFICIENT": 1,
+     "PARTIAL": 3
+    },
+    "statuses": {
+     "ANSWERED": 1,
+     "PARTIAL": 3
+    },
+    "expected_decisions": 3,
+    "failures": 0
+   }
+  },
+  "sources": {
+   "scored": 15,
+   "expected_in_candidates": 15,
+   "answered_with_citations": 15,
+   "wrong_source": 0,
+   "wrong_source_ids": [],
+   "missing_expected_ids": []
+  },
+  "faithfulness": {
+   "checked_answers": 19,
+   "supported": 61,
+   "unsupported": 16,
+   "invalid": 0,
+   "support_rate": 0.7922077922077922,
+   "sentences": 96,
+   "uncited_sentences": 19,
+   "unsupported_ids": [
+    "Q26",
+    "Q28",
+    "Q29",
+    "Q30",
+    "Q31",
+    "P5",
+    "P6",
+    "R9",
+    "R10",
+    "R11"
+   ]
+  },
+  "evidence": {
+   "answers": 19,
+   "candidates": 95,
+   "relevant": 39,
+   "subset_answers": 19,
+   "expected_dropped_ids": []
+  },
+  "latency_ms": {
+   "first_text_median": 3207.819600007497,
+   "first_text_max": 44141.293900000164,
+   "total_median": 9900.55590000702,
+   "total_max": 44741.63409997709,
+   "refusal_total_median": null,
+   "stages_median": {
+    "embedding": 898.885300004622,
+    "vector": 9.923899982823059,
+    "judge": 1286.865600006422,
+    "generate": 4438.788300001761
+   },
+   "generate_prompt_chars_median": 1045,
+   "answer_chars_median": 303
+  },
+  "calls": {
+   "question_calls": 38,
+   "support_calls": 77,
+   "retried_questions": 0,
+   "unavailable_after_retries": 0
+  }
+ },
+ "versions": {
+  "Python": "3.14.6",
+  "chromadb": "1.5.9",
+  "tokenizers": "0.23.2",
+  "langchain": "1.3.17",
+  "langchain-openai": "1.6.0"
+ },
+ "code_sha256": {
+  "retrieval.split_markdown": "489fe26f5016b1a107bc2a49ad756f4d7b53fe0f112cdd03b472f3e355f8e4cf",
+  "app/modules/qa/public.py": "4da51028646185b6f309c777d39f142c468def0bebb704919b300b4344b801d3",
+  "scripts/eval_answers.py": "2bf6d1754dc32715f616daf6c26d678983249d8c99d73f63af9077f009c066f4",
+  "scripts/eval_retrieval.py": "73c8519cc07deef5347c4c437e01d0fb2f986c40086ea1e04c9adf4c4cf51cfb"
+ },
+ "command": ".\\.venv\\Scripts\\python.exe -m scripts.eval_answers `\n  --golden-set '../docs/eval/golden-set-v3-hard.md' `\n  --tokenizer 'data/tokenizers/bge-m3-5617a9f61b028005a4858fdac845db406aefb181.json' `\n  --model 'bge-m3' `\n  --dimensions 1024 `\n  --top-k 5 `\n  --strategy hybrid `\n  --faithfulness `\n  --pause 1.0 --cooldown 15.0 --max-attempts 3 `\n  --output '../docs/eval/answers-v3-hybrid-2026-09-22.md'"
+}

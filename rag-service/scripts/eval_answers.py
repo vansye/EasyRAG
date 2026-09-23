@@ -39,6 +39,12 @@ CATEGORY_LABELS = {"Q": "直答", "R": "需改写", "N": "库外", "P": "部分�
 MIN_SENTENCE_CHARS = 4
 _CITATION = re.compile(r"\[(\d+(?:\s*[,，\-–]\s*\d+)*)\]")
 _JSON_OBJECT = re.compile(r"\{.*\}", re.DOTALL)
+# Sentences about the answer itself (boundary declarations, "based on the fragments above") make no factual claim.
+_META_SENTENCE = re.compile(r"覆盖边界|以上回答|仅基于|严格基于|基于提供的|基于已有|无法回答|无法确定|未提及|未包含|未涉及|不足以回答")
+
+
+def is_meta_sentence(sentence: str) -> bool:
+    return _META_SENTENCE.search(sentence) is not None
 
 
 @dataclass(frozen=True)
@@ -76,6 +82,7 @@ class QuestionResult:
     unsupported: int | None = None
     support_invalid: int | None = None
     support_calls: int = 0
+    meta_sentences: int = 0
     unsupported_sentences: list[dict] = field(default_factory=list)
 
     @property
@@ -178,6 +185,9 @@ def check_faithfulness(result: QuestionResult, session, rank_texts: dict[int, st
     for sentence in split_sentences(result.answer):
         ranks = [rank for rank in cited_ranks(sentence) if rank in rank_texts]
         if not ranks:
+            continue
+        if is_meta_sentence(sentence):
+            result.meta_sentences += 1
             continue
         if result.support_calls and pause:
             time.sleep(pause)
@@ -301,6 +311,7 @@ def summarize(results: list[QuestionResult]) -> dict:
         "support_rate": supported / (supported + unsupported) if supported + unsupported else None,
         "sentences": sum(result.sentences for result in results),
         "uncited_sentences": sum(result.uncited_sentences for result in results),
+        "meta_sentences": sum(result.meta_sentences for result in results),
         "unsupported_ids": [result.question_id for result in checked if result.unsupported],
     }
     generated = [result for result in results if result.first_text_ms is not None]
@@ -394,9 +405,11 @@ def render_report(report: dict) -> str:
         lines += [
             f"- 核对答案数：{faith['checked_answers']}；带引用的句子：支持 {faith['supported']}、不支持 {faith['unsupported']}、核对输出无效 {faith['invalid']}。",
             f"- 引用支持率：{'—' if rate is None else f'{rate:.1%}'}；存在不支持句子的题：{', '.join(faith['unsupported_ids']) or '无'}。",
-            f"- 句子总数 {faith['sentences']}，其中无引用句 {faith['uncited_sentences']}（无引用句不核对，只计数）。",
+            f"- 句子总数 {faith['sentences']}，其中无引用句 {faith['uncited_sentences']}（不核对，只计数），"
+            f"带引用的元话语句 {faith['meta_sentences']}（“以上回答基于片段”“覆盖边界说明”之类，不含事实断言，不核对）。",
             "", "核对方式：答案去掉围栏代码与列表/标题标记后按句号/问号/感叹号/换行切句，以冒号结尾的引导句和纯加粗标题不算句子；"
-            "每个带 [n] 的句子连同所引片段交给同一模型判断“是否完全由片段支持”。它衡量的是生成是否越出片段，不衡量答案是否正确。",
+            "每个带 [n] 的非元话语句连同所引片段交给同一模型判断“是否完全由片段支持”。它衡量的是生成是否越出片段，不衡量答案是否正确；"
+            "判官对改写与推理性补充偏严，支持率应读作下界。",
         ]
     else:
         lines.append("本次未开启 `--faithfulness`，未核对句子是否被片段支持。")
