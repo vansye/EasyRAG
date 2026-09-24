@@ -48,6 +48,17 @@ def test_frontmatter_ignores_values_crossing_java_line_terminators(terminator):
     assert document.tags == ()
 
 
+def test_frontmatter_block_list_tags_stop_at_next_key():
+    raw = '---\r\ntitle: Redis\r\ntags:\r\n  - Redis\r\n  - "内存, 管理"\r\n- 淘汰策略\r\nsource: 无\r\n  - 不是标签\r\n---\r\n正文'
+    assert knowledge.prepare_upload('note.md', raw.encode()).tags == ('Redis', '内存, 管理', '淘汰策略')
+
+
+@pytest.mark.parametrize('terminator', ['\x85', '\u2028', '\u2029'])
+def test_frontmatter_block_list_stops_at_items_crossing_java_line_terminators(terminator):
+    raw = f'---\ntags:\n  - a\n  - b{terminator}c\n  - d\n---\n# Fallback\nBody'
+    assert knowledge.prepare_upload('note.md', raw.encode()).tags == ('a',)
+
+
 def test_unsupported_upload_reports_extension():
     with pytest.raises(knowledge.InputRejected, match=r'\.pdf'):
         knowledge.prepare_upload('x.pdf', b'text')
