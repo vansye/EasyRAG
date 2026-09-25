@@ -9,8 +9,8 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.modules.answer_models.public import ModelUnavailable, Models
-from app.modules.knowledge.public import Knowledge
-from app.modules.retrieval.public import Retrieval
+from app.modules.knowledge.public import DatabaseUnavailable, Knowledge
+from app.modules.retrieval.public import Retrieval, RetrievalUnavailable
 
 from .documents import DocumentChanges
 from .errors import GateBusy
@@ -53,8 +53,16 @@ class Services:
         with ExitStack() as cleanup:
             knowledge = Knowledge()
             cleanup.callback(knowledge.close)
+            try:
+                knowledge.prepare_database()
+            except DatabaseUnavailable as failure:
+                logger.warning('database_prepare_failed cause=%s', type(failure).__name__)
             retrieval = Retrieval()
             cleanup.callback(retrieval.close)
+            try:
+                retrieval.prepare()
+            except RetrievalUnavailable as failure:
+                logger.warning('tokenizer_prepare_failed cause=%s', failure.cause)
             models = Models()
             try:
                 models.prepare()

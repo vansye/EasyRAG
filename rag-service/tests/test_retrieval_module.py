@@ -14,6 +14,7 @@ from tokenizers.pre_tokenizers import WhitespaceSplit
 from tokenizers.processors import TemplateProcessing
 
 from app.modules.retrieval import public as retrieval
+from app.modules.retrieval import _settings as retrieval_settings
 
 
 @pytest.fixture(autouse=True)
@@ -498,6 +499,39 @@ def test_missing_tokenizer_is_safe_and_does_not_disable_readonly_index_operation
     assert "private" not in str(error.value)
     assert module.inspect() == ()
     assert module.health()["tokenizer"]["status"] == "DOWN"
+
+
+def test_prepare_downloads_only_the_missing_pinned_default_tokenizer(module, settings, tmp_path, monkeypatch):
+    source = tmp_path / "hub-cache.json"
+    source.write_text('{"pinned": true}', encoding="utf-8")
+    calls = []
+    monkeypatch.setattr(retrieval, "_hf_hub_download", lambda **kwargs: calls.append(kwargs) or str(source))
+    settings.chunk_tokenizer_path = tmp_path / "custom-tokenizer.json"
+    module.prepare()
+    assert calls == [] and not settings.chunk_tokenizer_path.exists()
+
+    target = tmp_path / "data" / retrieval_settings.DEFAULT_TOKENIZER_PATH.name
+    settings.chunk_tokenizer_path = target
+    module.prepare()
+    assert calls == [{"repo_id": "BAAI/bge-m3", "filename": "tokenizer.json",
+                      "revision": retrieval_settings.DEFAULT_TOKENIZER_REVISION}]
+    assert target.read_text(encoding="utf-8") == '{"pinned": true}'
+    module.prepare()
+    assert len(calls) == 1
+
+
+def test_failed_tokenizer_download_leaves_no_partial_file(module, settings, tmp_path, monkeypatch):
+    def unreachable(**_kwargs):
+        raise OSError("private-network-detail")
+
+    monkeypatch.setattr(retrieval, "_hf_hub_download", unreachable)
+    target = tmp_path / retrieval_settings.DEFAULT_TOKENIZER_PATH.name
+    settings.chunk_tokenizer_path = target
+    with pytest.raises(retrieval.RetrievalUnavailable) as error:
+        module.prepare()
+    assert (error.value.component, error.value.cause) == ("tokenizer", "OSError")
+    assert "private" not in str(error.value)
+    assert not target.exists() and not target.with_name(target.name + ".part").exists()
 
 
 def test_unavailable_index_fails_before_embedding_and_reports_a_safe_local_snapshot(module, offline_embedding, monkeypatch):

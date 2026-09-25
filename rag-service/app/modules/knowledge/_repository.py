@@ -279,6 +279,9 @@ class Knowledge:
         with self._transaction() as connection:
             _history.delete_record(connection, history_id)
 
+    def prepare_database(self):
+        self._require_database().prepare()
+
     def initialize_database(self):
         self._require_database().initialize()
 

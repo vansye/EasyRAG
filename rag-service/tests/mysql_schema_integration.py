@@ -6,11 +6,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pymysql
 import pytest
 
 from app.application.process_lock import ProcessLock
 from app.modules.knowledge import public as knowledge
-from tests.mysql_support import mysql_sandbox
+from tests.mysql_support import connection_options, mysql_sandbox
 
 
 LEGACY = Path(__file__).resolve().parents[1] / 'app/modules/knowledge/migrations/legacy'
@@ -194,5 +195,49 @@ def test_upgrade_does_not_initialize_an_unowned_database():
             with sandbox.connect() as connection, connection.cursor() as cursor:
                 cursor.execute('SHOW TABLES')
                 assert cursor.fetchall() == ()
+        finally:
+            service.close()
+
+
+def test_prepare_creates_a_missing_database_with_the_current_schema():
+    with mysql_sandbox() as sandbox:
+        admin = pymysql.connect(**connection_options(), autocommit=True)
+        try:
+            with admin.cursor() as cursor:
+                cursor.execute(f'DROP DATABASE `{sandbox.name}`')
+        finally:
+            admin.close()
+        service = knowledge.Knowledge(sandbox.settings())
+        try:
+            assert service.health()['status'] == 'DOWN'
+            service.prepare_database()
+            service.prepare_database()
+            assert service.health()['status'] == 'UP'
+            with sandbox.connect() as connection, connection.cursor() as cursor:
+                cursor.execute('SELECT DEFAULT_COLLATION_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME=%s',
+                               (sandbox.name,))
+                assert cursor.fetchone() == ('utf8mb4_unicode_ci',)
+                cursor.execute('SELECT version_num FROM alembic_version')
+                assert cursor.fetchone() == ('0002_question_history',)
+        finally:
+            service.close()
+
+
+def test_prepare_upgrades_managed_databases_but_leaves_unadopted_legacy_ones_untouched():
+    with mysql_sandbox() as sandbox:
+        install_legacy(sandbox)
+        service = knowledge.Knowledge(sandbox.settings())
+        try:
+            with pytest.raises(knowledge.SchemaMismatch):
+                service.prepare_database()
+            with sandbox.connect() as connection, connection.cursor() as cursor:
+                cursor.execute("SHOW TABLES LIKE 'alembic_version'")
+                assert not cursor.fetchall()
+            service.adopt_legacy_database()
+            service.prepare_database()
+            assert service.health()['status'] == 'UP'
+            with sandbox.connect() as connection, connection.cursor() as cursor:
+                cursor.execute('SELECT version_num FROM alembic_version')
+                assert cursor.fetchone() == ('0002_question_history',)
         finally:
             service.close()

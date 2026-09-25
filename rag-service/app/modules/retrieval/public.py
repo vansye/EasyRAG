@@ -6,10 +6,13 @@ from collections.abc import Callable, Iterable, Sequence
 from contextlib import contextmanager
 from functools import lru_cache
 from hashlib import sha256
+import os
 from pathlib import Path
+import shutil
 from time import perf_counter
 
 import httpx as _httpx
+from huggingface_hub import hf_hub_download as _hf_hub_download
 from tokenizers import Tokenizer as _Tokenizer
 
 from ._chunking import Chunk, split_markdown
@@ -18,7 +21,7 @@ from ._index_store import (
     ChunkIdConflict, IndexEntry, IndexMetadataMismatch, IndexStore as _IndexStore, IndexWriteError, SearchHit,
 )
 from ._lexical import LexicalIndex, fuse_rankings, tokenize
-from ._settings import RetrievalSettings
+from ._settings import DEFAULT_TOKENIZER_PATH, DEFAULT_TOKENIZER_REPO, DEFAULT_TOKENIZER_REVISION, RetrievalSettings
 
 
 ChunkDraft = Chunk
@@ -108,6 +111,23 @@ class Retrieval:
         if state["status"] != "UP":
             raise RetrievalUnavailable("index", state["error"])
         return self._index
+
+    def prepare(self) -> None:
+        """Fetch the pinned default tokenizer when its file is missing; any other tokenizer is the operator's."""
+        path = self._require_settings().chunk_tokenizer_path
+        if path.exists() or path.name != DEFAULT_TOKENIZER_PATH.name:
+            return
+        partial = path.with_name(path.name + ".part")
+        try:
+            downloaded = _hf_hub_download(
+                repo_id=DEFAULT_TOKENIZER_REPO, filename="tokenizer.json", revision=DEFAULT_TOKENIZER_REVISION,
+            )
+            path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(downloaded, partial)
+            os.replace(partial, path)
+        except Exception as exc:
+            partial.unlink(missing_ok=True)
+            raise RetrievalUnavailable("tokenizer", type(exc).__name__) from None
 
     def split(self, content: str, title: str) -> tuple[ChunkDraft, ...]:
         """Preserve the original body and UTF-8 offsets; document title is not prepended."""

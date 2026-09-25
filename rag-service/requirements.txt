@@ -22,6 +22,8 @@ pydantic-settings==2.15.0
 # 持久化开箱即用。几百篇规模下 FAISS 的性能优势无意义，而元数据能力缺失是实痛。
 chromadb==1.5.9
 tokenizers==0.23.2
+# 默认 tokenizer 缺失时按固定版本下载
+huggingface_hub==1.31.0
 
 # --- 词法索引（M2 建好，M4 混合检索启用）---
 rank-bm25==0.2.2

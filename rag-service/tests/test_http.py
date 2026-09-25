@@ -22,7 +22,7 @@ from app.modules.retrieval.public import Retrieval, SearchHit
 
 
 @pytest.fixture
-def workspace(tmp_path, monkeypatch):
+def workspace(tmp_path, monkeypatch, request):
     monkeypatch.setenv('LLM_MODEL', '')
     monkeypatch.setenv('LLM_API_KEY', '')
     a, b = Mock(spec=Knowledge), Mock(spec=Retrieval)
@@ -63,7 +63,14 @@ def workspace(tmp_path, monkeypatch):
 
     services.queue.submit = Mock(side_effect=submit)
     settings = RuntimeSettings(_env_file=None, runtime_lock_file=tmp_path / 'backend.lock')
-    app = create_app(services, settings=settings)
+    frontend = None
+    if getattr(request, 'param', None) == 'frontend':
+        frontend = tmp_path / 'dist'
+        (frontend / 'assets').mkdir(parents=True)
+        (frontend / 'index.html').write_text('<div id="app"></div>', encoding='utf-8')
+        (frontend / 'assets' / 'app.js').write_text('console.log(1)', encoding='utf-8')
+        (tmp_path / 'secret.txt').write_text('outside', encoding='utf-8')
+    app = create_app(services, settings=settings, frontend_dist=frontend)
     with TestClient(app) as client:
         yield SimpleNamespace(a=a, b=b, models=models, services=services, client=client, app=app)
 
@@ -291,6 +298,25 @@ def test_unexpected_configuration_failure_is_sanitized_and_never_cached(workspac
 @pytest.mark.parametrize('path', ['/chunk', '/embed', '/query', '/reset', '/index/reset', '/runtime', '/model-config'])
 def test_internal_legacy_endpoints_are_not_exposed(workspace, path):
     assert workspace.client.post(path).status_code == 404
+
+
+@pytest.mark.parametrize('workspace', ['frontend'], indirect=True)
+def test_built_frontend_is_served_without_shadowing_api_routes(workspace):
+    client = workspace.client
+    for path in ('/', '/ask', '/library/7'):
+        response = client.get(path)
+        assert response.status_code == 200 and response.text == '<div id="app"></div>'
+    assert client.get('/assets/app.js').text == 'console.log(1)'
+    assert client.get('/../secret.txt').text == '<div id="app"></div>'
+    assert client.get('/api/unknown').status_code == 404
+    assert client.get('/api/unknown').json() == {'error': '接口不存在'}
+    assert client.get('/health').json()['status'] == 'UP'
+    assert client.get('/api/documents').json()['total'] == 1
+    assert client.post('/ask').status_code == 404
+
+
+def test_without_a_frontend_build_unknown_pages_stay_404(workspace):
+    assert workspace.client.get('/').status_code == 404
 
 
 @pytest.mark.parametrize('page,size', [(-1,20),(0,0),(0,101)])

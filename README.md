@@ -50,55 +50,35 @@ sample-knowledge/               29 篇样例语料
 
 ## 本地启动
 
-需要 Python 3.14、MySQL 8.0、Node.js 24；默认 embedding 使用本地 Ollama 的 `bge-m3`。也可配置兼容的远程 embedding API。
-
-先通过 MySQL 客户端创建数据库：
-
-```sql
-CREATE DATABASE easyrag CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-```
-
-在 PowerShell 中准备后端：
+需要 Python 3.14、Node.js 24、MySQL 8.0 和 Ollama（默认 embedding 为本地 `bge-m3`，也可配置兼容的远程 embedding API）。在 PowerShell 中：
 
 ```powershell
 cd rag-service
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 Copy-Item .env.example .env
-```
-
-在 `.env` 填入 `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_DATABASE`、`MYSQL_USER`、`MYSQL_PASSWORD`。配置不入库。Linux/macOS 使用 `.venv/bin/python` 和 `cp .env.example .env`；下列 Python 命令对应替换即可。
-
-Windows 下 `CHROMA_DIR` 必须是纯 ASCII 路径（默认值在项目目录下，若项目路径含中文请显式改为如 `D:/easyrag-data/chroma`）：chromadb 1.5.9 在非 ASCII 目录下写不出 HNSW 文件且不报错，重启后向量丢失。后端在这种路径下拒绝打开索引，`/health` 的 `chroma.error` 为 `UnsafePersistencePath`。
-
-首次空库初始化：
-
-```powershell
-.\.venv\Scripts\python.exe -m app.maintenance init-db
-```
-
-已有 Java/Flyway V2 数据库先使用 `adopt-legacy-db`，不要对旧库运行初始化或删除表。该命令校验历史校验和、字段、索引及外键后只登记 `0001_legacy_v2` 基线；随后须在停止后端时运行 `upgrade-db`。已经使用该 Alembic 基线的数据库直接运行 `upgrade-db`，增加独立的问答历史表并保留现存资料。当前版本为 `0002_question_history`；启动服务不会自动升级，未升级时数据库健康检查为 DOWN。空库 `init-db` 直接建立当前版本。旧版切换流程见 [切换与回退](docs/fastapi-cutover.md)，历史功能还需执行上述新增升级步骤。
-
-准备默认检索模型与固定版本的 tokenizer：
-
-```powershell
 ollama pull bge-m3
-New-Item -ItemType Directory -Force data/tokenizers | Out-Null
-curl.exe -L -o data/tokenizers/bge-m3-5617a9f61b028005a4858fdac845db406aefb181.json https://huggingface.co/BAAI/bge-m3/resolve/5617a9f61b028005a4858fdac845db406aefb181/tokenizer.json
+
+cd ..\frontend
+npm ci
+npm run build
+
+cd ..\rag-service
 .\.venv\Scripts\python.exe -m app
 ```
 
-只运行一个后端进程和一个 worker。后端与维护命令共用 `RUNTIME_LOCK_FILE`，同一套数据必须使用同一个锁路径；不要为多实例配置不同锁。启动后先访问 `http://127.0.0.1:8080/health`：进程始终单独报告 UP，数据库、Chroma、embedding 和 tokenizer 分层报告依赖状态。资料浏览与模型配置不依赖模型服务成功。
+`.env` 里填好 MySQL 连接（`MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_USER`、`MYSQL_PASSWORD`，库名默认 `easyrag`）；配置不入库。回答模型可以写在 `.env`，也可以启动后在网页里配置。Linux/macOS 使用 `.venv/bin/python` 和 `cp .env.example .env`。
 
-在另一终端启动前端：
+打开 `http://127.0.0.1:8080/`，点击「确认就绪」。后端启动时是 `RECOVERY_REQUIRED`；只有资料/切片/向量完整一致才开放问答，并重新提交 PENDING。
 
-```powershell
-cd frontend
-npm ci
-npm run dev -- --host 127.0.0.1 --port 5173
-```
+启动时后端会：
+- 在库不存在时创建数据库（utf8mb4），空库建表，已有库升级到当前结构；数据库用户需要相应权限。旧版 Java/Flyway V2 数据库不会被自动改动，需停服后先运行 `python -m app.maintenance adopt-legacy-db`（流程见 [切换与回退](docs/fastapi-cutover.md)）。
+- 在默认 tokenizer 文件缺失时，从 Hugging Face 按固定版本下载（约 17 MB）；网络受限时可设置 `HF_ENDPOINT` 使用镜像。
+- 在 `frontend/dist` 存在时直接托管前端页面；开发前端时可另开终端运行 `npm run dev -- --host 127.0.0.1 --port 5173`，Vite 把 `/api` 与 `/health` 代理到 8080。页面和交互说明见 [前端 README](frontend/README.md)。
 
-打开 `http://127.0.0.1:5173/`，点击「确认就绪」。后端启动时是 `RECOVERY_REQUIRED`；只有资料/切片/向量完整一致才开放问答，并重新提交 PENDING。程序不会自动替用户确认恢复。前端继续代理 `/api` 与 `/health` 到 8080，页面和交互说明见 [前端 README](frontend/README.md)。
+Windows 下 `CHROMA_DIR` 必须是纯 ASCII 路径（默认值在项目目录下，若项目路径含中文请显式改为如 `D:/easyrag-data/chroma`）：chromadb 1.5.9 在非 ASCII 目录下写不出 HNSW 文件且不报错，重启后向量丢失。后端在这种路径下拒绝打开索引，`/health` 的 `chroma.error` 为 `UnsafePersistencePath`。
+
+只运行一个后端进程和一个 worker。后端与维护命令共用 `RUNTIME_LOCK_FILE`，同一套数据必须使用同一个锁路径。`http://127.0.0.1:8080/health` 始终单独报告进程 UP，数据库、Chroma、embedding 和 tokenizer 分层报告依赖状态；资料浏览与模型配置不依赖模型服务成功。
 
 ## 回答模型
 
