@@ -1,15 +1,18 @@
 <script setup lang="ts">
+import { Lexer } from 'marked'
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
+import AnswerBody from '@/features/qa/components/AnswerBody'
 import { useQuestionStore } from '@/features/qa/store'
 import type { ChunkRow, DocumentDetail } from '@/shared/api/types'
 import AppIcon from '@/shared/components/AppIcon.vue'
 import { useGateStore } from '@/shared/gate'
 import { deleteDocument, getChunks, getDocument, reindexDocument, updateDocumentContent } from '../api'
-import { documentStatus, displayDate } from '../model'
+import { documentStatus, displayDate, previewSource } from '../model'
 import { useDocumentStore } from '../store'
 import '@/styles/drawer.css'
+import '@/styles/qa.css'
 
 const props = defineProps<{ documentId: number | null; chunkId: number | null }>()
 const emit = defineEmits<{ close: [] }>()
@@ -26,13 +29,15 @@ const error = ref('')
 const draft = ref('')
 const editing = ref(false)
 const confirmingDelete = ref(false)
-const tab = ref<'content' | 'chunks'>('content')
+const tabs = ['preview', 'content', 'chunks'] as const
+const tab = ref<typeof tabs[number]>('preview')
 const feedback = ref('')
 let version = 0
 let timer: ReturnType<typeof setTimeout> | undefined
 let returnFocus: HTMLElement | null = null
 const dirty = computed(() => editing.value && draft.value !== detail.value?.content)
 const canMutate = computed(() => gate.connected && gate.runtime?.rag_available === true && gate.runtime.state === 'READY' && !qa.loading && !busy.value)
+const previewTokens = computed(() => detail.value ? Lexer.lex(previewSource(detail.value.content), { gfm: true, breaks: true }) : [])
 const missingHighlight = computed(() => props.chunkId && detail.value && !loading.value && !chunks.value.some((chunk) => chunk.id === props.chunkId))
 const stopNavigationGuard = router.beforeEach((to, from) => {
   if (!props.documentId || (to.query.document === from.query.document && to.query.chunk === from.query.chunk)) return
@@ -71,8 +76,9 @@ function documentElementForChunk(id: number) { return document.getElementById(`d
 function navigateTabs(event: KeyboardEvent) {
   if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
   event.preventDefault()
-  tab.value = editing.value || event.key === 'Home' ? 'content'
-    : event.key === 'End' ? 'chunks' : tab.value === 'content' ? 'chunks' : 'content'
+  const step = event.key === 'ArrowRight' ? 1 : tabs.length - 1
+  tab.value = editing.value ? 'content' : event.key === 'Home' ? tabs[0]
+    : event.key === 'End' ? tabs[tabs.length - 1] : tabs[(tabs.indexOf(tab.value) + step) % tabs.length]!
   document.getElementById(`${tab.value}-tab`)?.focus()
 }
 
@@ -161,7 +167,7 @@ watch(() => [props.documentId, props.chunkId], async () => {
   editing.value = false
   confirmingDelete.value = false
   feedback.value = ''
-  tab.value = props.chunkId ? 'chunks' : 'content'
+  tab.value = props.chunkId ? 'chunks' : 'preview'
   await nextTick()
   if (!dialog.value?.open) dialog.value?.showModal()
   document.body.classList.add('dialog-open')
@@ -189,9 +195,10 @@ onUnmounted(() => {
         <div v-if="detail.index_status === 'FAILED'" class="notice notice-error drawer-notice"><AppIcon name="info" :size="17" /><div class="notice-message"><strong>这份资料尚未处理完成</strong><span>{{ detail.index_error || '请确认服务可用后，重新处理这份资料。' }}</span></div><button class="text-button" :disabled="!canMutate" @click="retry">重新处理</button></div>
         <div v-if="missingHighlight" class="notice notice-warm drawer-notice"><AppIcon name="info" :size="17" /><span>引用的片段已发生变化，下方展示这份资料的当前内容。</span></div>
 
-        <div class="drawer-tabs" role="tablist" aria-label="资料内容"><button id="content-tab" role="tab" :aria-selected="tab === 'content'" :tabindex="tab === 'content' ? 0 : -1" aria-controls="document-content" :class="{ active: tab === 'content' }" @click="tab = 'content'" @keydown="navigateTabs">原文</button><button id="chunks-tab" role="tab" :aria-selected="tab === 'chunks'" :tabindex="tab === 'chunks' ? 0 : -1" aria-controls="document-chunks" :class="{ active: tab === 'chunks' }" :disabled="editing" @click="tab = 'chunks'" @keydown="navigateTabs">引用片段<span>{{ chunks.length }}</span></button><button v-if="!editing" class="text-button drawer-edit" :disabled="!canMutate" @click="startEditing"><AppIcon name="edit" :size="14" />修改正文</button><span v-else class="editing-indicator">编辑中</span></div>
+        <div class="drawer-tabs" role="tablist" aria-label="资料内容"><button id="preview-tab" role="tab" :aria-selected="tab === 'preview'" :tabindex="tab === 'preview' ? 0 : -1" aria-controls="document-preview" :class="{ active: tab === 'preview' }" :disabled="editing" @click="tab = 'preview'" @keydown="navigateTabs">预览</button><button id="content-tab" role="tab" :aria-selected="tab === 'content'" :tabindex="tab === 'content' ? 0 : -1" aria-controls="document-content" :class="{ active: tab === 'content' }" @click="tab = 'content'" @keydown="navigateTabs">原文</button><button id="chunks-tab" role="tab" :aria-selected="tab === 'chunks'" :tabindex="tab === 'chunks' ? 0 : -1" aria-controls="document-chunks" :class="{ active: tab === 'chunks' }" :disabled="editing" @click="tab = 'chunks'" @keydown="navigateTabs">引用片段<span>{{ chunks.length }}</span></button><button v-if="!editing" class="text-button drawer-edit" :disabled="!canMutate" @click="startEditing"><AppIcon name="edit" :size="14" />修改正文</button><span v-else class="editing-indicator">编辑中</span></div>
 
         <div class="drawer-scroll-area">
+          <section v-show="tab === 'preview'" id="document-preview" role="tabpanel" aria-labelledby="preview-tab"><AnswerBody :tokens="previewTokens" :citations="[]" /></section>
           <section v-show="tab === 'content'" id="document-content" role="tabpanel" aria-labelledby="content-tab">
             <template v-if="editing"><label class="visually-hidden" for="document-editor">编辑资料正文</label><textarea id="document-editor" v-model="draft" class="document-editor" spellcheck="false" :disabled="busy" /><p class="editor-hint">保存后会重新处理资料，新的回答将使用更新后的内容。</p></template>
             <pre v-else class="original-content">{{ detail.content }}</pre>

@@ -6,6 +6,13 @@ export function documentStatus(status: IndexStatus): { label: string; tone: stri
   return { label: '处理中', tone: 'pending', icon: 'clock' }
 }
 
+const FRONTMATTER = /^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/
+
+/** 预览不显示开头的 frontmatter，识别规则与后端 `_intake.py` 的 FRONTMATTER 一致。 */
+export function previewSource(content: string): string {
+  return content.replace(FRONTMATTER, '')
+}
+
 export function displayDate(value: string): string {
   const date = new Date(value)
   const today = new Date()

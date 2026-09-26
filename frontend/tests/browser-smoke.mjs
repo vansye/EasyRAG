@@ -22,7 +22,7 @@ const documents = [
   { id: 4, title: '把笔记变成可用的知识', tags: ['知识管理'], index_status: 'INDEXED' },
   { id: 5, title: 'Java Web 请求处理流程', tags: ['Java Web'], index_status: 'INDEXED' },
   { id: 6, title: '我的学习计划', tags: [], index_status: 'FAILED' },
-].map((document) => ({ ...document, source_type: 'UPLOAD', chunk_count: 3, updated_at: '2026-09-14T14:20:00', content: `# ${document.title}\n\n这是一份仅在浏览器测试中使用的资料。` }))
+].map((document) => ({ ...document, source_type: 'UPLOAD', chunk_count: 3, updated_at: '2026-09-14T14:20:00', content: `# ${document.title}\n\n这是一份仅在浏览器测试中使用的资料。[原始网页](https://example.com/source) 备用地址 https://example.com/raw` }))
 let processingUntil = 0
 let reindexingId = null
 let documentListCalls = 0
@@ -155,6 +155,13 @@ try {
   await confirmedBack
   await page.locator('dialog[open]').waitFor({ state: 'hidden' })
   await page.goForward()
+  await page.locator('#document-preview').waitFor()
+  assert.equal(await page.getByRole('tab', { name: '预览', exact: true }).getAttribute('aria-selected'), 'true', 'the detail drawer must open on the preview')
+  const sourceLink = page.locator('#document-preview').getByRole('link', { name: '原始网页', exact: true })
+  assert.equal(await sourceLink.getAttribute('href'), 'https://example.com/source')
+  assert.equal(await sourceLink.getAttribute('target'), '_blank')
+  assert.equal(await page.locator('#document-preview').getByRole('link', { name: 'https://example.com/raw', exact: true }).getAttribute('target'), '_blank', 'bare addresses must also open as links')
+  await page.getByRole('tab', { name: '原文', exact: true }).click()
   await page.locator('.original-content').waitFor()
   assert.equal(await page.locator('.original-content').innerText(), documents[0].content)
   await page.getByRole('button', { name: '关闭资料详情', exact: true }).click()
@@ -196,6 +203,10 @@ try {
   assert.equal(await page.getByRole('tab', { name: '原文', exact: true }).getAttribute('aria-selected'), 'true')
   await page.keyboard.press('End')
   assert.equal(await page.getByRole('tab', { name: '引用片段' }).getAttribute('aria-selected'), 'true')
+  await page.keyboard.press('ArrowRight')
+  assert.equal(await page.getByRole('tab', { name: '预览', exact: true }).getAttribute('aria-selected'), 'true')
+  await page.keyboard.press('ArrowLeft')
+  assert.equal(await page.getByRole('tab', { name: '引用片段' }).getAttribute('aria-selected'), 'true')
   await page.screenshot({ path: fileURLToPath(new URL('test-drawer.png', artifacts)), fullPage: true })
   await page.getByRole('button', { name: '修改正文', exact: true }).click()
   await page.getByRole('textbox', { name: '编辑资料正文' }).fill('# 更新后的测试资料\n\n保存后应提示重新提问。')
@@ -208,7 +219,7 @@ try {
 
   await page.getByRole('link', { name: '资料库', exact: true }).click()
   await page.getByRole('link', { name: '知识问答', exact: true }).click()
-  assert.match(await page.locator('.answer-body').innerText(), /RDB/)
+  assert.match(await page.locator('.answer-paper .answer-body').innerText(), /RDB/)
   await page.waitForTimeout(2100)
   await page.getByRole('textbox', { name: '向知识库提问' }).fill('只有部分资料时如何回答？')
   await page.getByRole('button', { name: '发送问题', exact: true }).click()

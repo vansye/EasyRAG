@@ -248,7 +248,7 @@ try {
     await page.locator('.document-title').nth(1).click()
     await page.locator('#document-heading').filter({ hasText: docs[1].title }).waitFor()
     assert.equal(await page.locator('.drawer-notice.notice-success').count(), 0)
-    assert.equal(await page.locator('.original-content').innerText(), '# Original 2')
+    assert.equal(await page.locator('#document-preview').innerText(), 'Original 2')
   })
 
   await run('successful deletion can close through the navigation guard', async ({ page, docs }) => {
