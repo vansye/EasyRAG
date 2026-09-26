@@ -12,6 +12,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 SERVICE_DIR = Path(__file__).resolve().parents[3]
 DATA_DIR = SERVICE_DIR / "data"
+# The default tokenizer is pinned to one Hugging Face commit so chunk boundaries stay reproducible.
+DEFAULT_TOKENIZER_REPO = "BAAI/bge-m3"
+DEFAULT_TOKENIZER_REVISION = "5617a9f61b028005a4858fdac845db406aefb181"
+DEFAULT_TOKENIZER_PATH = DATA_DIR / f"tokenizers/bge-m3-{DEFAULT_TOKENIZER_REVISION}.json"
 
 
 class RetrievalSettings(BaseSettings):
@@ -31,9 +35,7 @@ class RetrievalSettings(BaseSettings):
 
     chunk_max_tokens: int = Field(default=512, gt=0)
     chunk_min_tokens: int = Field(default=64, ge=0)
-    chunk_tokenizer_path: Path = (
-        DATA_DIR / "tokenizers/bge-m3-5617a9f61b028005a4858fdac845db406aefb181.json"
-    )
+    chunk_tokenizer_path: Path = DEFAULT_TOKENIZER_PATH
     embed_batch_size: int = Field(default=64, ge=1)
     chroma_dir: Path = DATA_DIR / "chroma"
     # "hybrid" fuses BM25 over the same payload with the vector ranking (B-17); "dense" is the vector ranking alone.

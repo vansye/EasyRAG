@@ -3,12 +3,13 @@
 from dataclasses import asdict
 from functools import wraps
 import logging
+from pathlib import Path
 import re
 from typing import Annotated, Any
 
 from fastapi import Body, FastAPI, File, Request, Response, UploadFile
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, BeforeValidator, ConfigDict, StrictStr
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.exceptions import HTTPException
@@ -118,8 +119,18 @@ def _worker(handler):
     return invoke
 
 
-def create_app(services: Services | None = None, *, settings: RuntimeSettings | None = None) -> FastAPI:
+def _frontend_file(root: Path, path: str) -> FileResponse:
+    """A built asset when one exists under root; otherwise the SPA entry so client routes resolve."""
+    candidate = (root / path.lstrip('/')).resolve()
+    if candidate.is_file() and candidate.is_relative_to(root):
+        return FileResponse(candidate)
+    return FileResponse(root / 'index.html')
+
+
+def create_app(services: Services | None = None, *, settings: RuntimeSettings | None = None,
+               frontend_dist: Path | None = None) -> FastAPI:
     settings = settings if settings is not None else RuntimeSettings()
+    frontend = frontend_dist.resolve() if frontend_dist and (frontend_dist / 'index.html').is_file() else None
     app = FastAPI(title='EasyRAG', lifespan=lifespan_for(services, settings))
     app.add_middleware(_ApiBoundary)
 
@@ -140,7 +151,11 @@ def create_app(services: Services | None = None, *, settings: RuntimeSettings | 
         return JSONResponse({'error': message}, status_code=400)
 
     @app.exception_handler(HTTPException)
-    async def http_error(_request, failure):
+    async def http_error(request, failure):
+        path = request.url.path
+        if (frontend is not None and failure.status_code == 404 and request.method == 'GET'
+                and path != '/health' and path != '/api' and not path.startswith('/api/')):
+            return _frontend_file(frontend, path)
         message = _UPLOAD_TOO_LARGE if failure.detail == _UPLOAD_TOO_LARGE else {
             404: '接口不存在', 405: '请求方式不支持',
         }.get(failure.status_code, '请求参数无效')

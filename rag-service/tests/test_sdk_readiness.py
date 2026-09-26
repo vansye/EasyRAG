@@ -13,8 +13,8 @@ from app.application import runtime
 from app.application.process_lock import ProcessLock, RuntimeLockUnavailable
 from app.http import create_app
 from app.modules.answer_models.public import ModelUnavailable, Models
-from app.modules.knowledge.public import Knowledge
-from app.modules.retrieval.public import Retrieval
+from app.modules.knowledge.public import Knowledge, SchemaMismatch
+from app.modules.retrieval.public import Retrieval, RetrievalUnavailable
 
 
 def application(monkeypatch, tmp_path, models):
@@ -120,3 +120,18 @@ def test_sdk_preparation_failure_preserves_startup_health_and_model_configuratio
     retrieval.close.assert_called_once_with()
     with ProcessLock(lock_path):
         pass
+
+
+def test_database_and_tokenizer_preparation_failures_only_log_and_startup_continues(tmp_path, monkeypatch, caplog):
+    app, knowledge, retrieval, _lock_path = application(monkeypatch, tmp_path, Mock(spec=Models))
+    knowledge.prepare_database.side_effect = SchemaMismatch("private-schema-detail")
+    retrieval.prepare.side_effect = RetrievalUnavailable("tokenizer", "OSError")
+
+    with caplog.at_level(logging.WARNING, logger="app.application.runtime"), TestClient(app) as client:
+        knowledge.prepare_database.assert_called_once_with()
+        retrieval.prepare.assert_called_once_with()
+        assert client.get("/health").json()["status"] == "UP"
+
+    messages = [record.getMessage() for record in caplog.records if record.name == "app.application.runtime"]
+    assert messages == ["database_prepare_failed cause=SchemaMismatch", "tokenizer_prepare_failed cause=OSError"]
+    assert "private-" not in caplog.text

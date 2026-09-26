@@ -31,13 +31,18 @@ class DatabaseSettings(BaseSettings):
     mysql_password: SecretStr = SecretStr('')
 
 
+def _url(settings: DatabaseSettings, database: str | None) -> URL:
+    return URL.create('mysql+pymysql', username=settings.mysql_user,
+                      password=settings.mysql_password.get_secret_value(), host=settings.mysql_host,
+                      port=settings.mysql_port, database=database, query={'charset': 'utf8mb4'})
+
+
 class Database:
     def __init__(self, settings: DatabaseSettings):
+        self._settings = settings
         self._schema_verified = False
         self._engine = create_engine(
-            URL.create('mysql+pymysql', username=settings.mysql_user,
-                       password=settings.mysql_password.get_secret_value(), host=settings.mysql_host,
-                       port=settings.mysql_port, database=settings.mysql_database, query={'charset': 'utf8mb4'}),
+            _url(settings, settings.mysql_database),
             pool_pre_ping=True, pool_size=10, max_overflow=0, pool_timeout=3,
             isolation_level='READ COMMITTED',
             connect_args={'connect_timeout': 3, 'init_command': "SET time_zone = '+08:00'"},
@@ -86,6 +91,39 @@ class Database:
                 raise SchemaMismatch('database is not empty; use adopt-legacy-db after verification')
             command.upgrade(self._alembic(connection), REVISION)
             verify_schema(connection)
+
+    def _create_missing_database(self):
+        name = self._settings.mysql_database
+        server = create_engine(_url(self._settings, None), connect_args={'connect_timeout': 3}, hide_parameters=True)
+        try:
+            with server.begin() as connection:
+                exists = connection.execute(text(
+                    'SELECT 1 FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = :name'), {'name': name}).first()
+                if exists is None:
+                    quoted = name.replace('`', '``')
+                    connection.execute(text(
+                        f'CREATE DATABASE `{quoted}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'))
+        except SQLAlchemyError as failure:
+            raise DatabaseUnavailable('数据库未能创建') from failure
+        finally:
+            server.dispose()
+
+    def prepare(self):
+        """Create a missing database, then bring an empty or Alembic-managed one to the current revision.
+
+        Unmanaged non-empty databases (such as a legacy Flyway V2 schema) are left untouched for
+        an explicit, verified adopt-legacy-db.
+        """
+        self._create_missing_database()
+        with self.transaction() as connection:
+            managed = self._revision(connection) is not None
+            empty = not inspect(connection).get_table_names()
+        if empty:
+            self.initialize()
+        elif managed:
+            self.upgrade()
+        else:
+            raise SchemaMismatch('database is not managed by this service; verify it and run adopt-legacy-db')
 
     def adopt(self):
         with self.transaction() as connection:
